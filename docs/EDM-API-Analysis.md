@@ -1288,3 +1288,109 @@ Bulk Import 가 네이티브 실행파일로 수행하는 그 처리를 대체�
 
 **확인할 것**: 우리 `ALT:` vs 매뉴얼 `ALT_CELL:` 키워드 불일치 (44-1).
 현재 빈 값이라 문제없어 보이나, 대체 셀을 쓰게 되면 영향이 있다.
+
+---
+
+# 【정정 2026-09-17 20시】 BLOB 은 존재한다 — 29항·35항 결론 수정
+
+사용자 반문: *"OI API 로 Object 생성 후 OIBlob 으로 STEP 업로드하는 게
+정말 안될까? 메타데이터는 API 로 나중에 만들고"*
++ Cockpit UI 증거 (`3D_Model_Documents.jpg`): Documents > 3D Models 카탈로그에
+**Attachments 탭**으로 파일이 붙어 있음.
+
+**사용자 지적이 옳았다. 29항과 35항의 "BLOB 필드가 없다"는 결론은 틀렸다.**
+
+## 47. 오류의 원인
+
+나는 클래스의 **최상위 필드만** 스캔했다. 그런데 첨부는 최상위가 아니라
+**`FileInformation` (OISetField) 내부의 행 객체**에 들어 있다.
+Admin 가이드의 `110doc_lst` 리스트 프레임과 같은 구조다 (p.427-429).
+
+또 `OIObjectSet` 을 커서처럼 `next()` 로 순회하려다 실패했는데,
+실제로는 **표준 Java `Collection`** 이다. `iterator()` 로 돌면 된다.
+
+## 48. ★ 실제 구조 — BLOB 실재 확인 ★
+
+`0404-001650` 의 `DocumentRef → FileInformation` 내부:
+
+    [1] InnerObjectWrapper
+        ViewDocument  [OIActionField]  =
+        Index         [OIIntegerField] = 1
+        Vault         [OIStringField]  = Default
+        FileType      [OIStringField]  = pdf
+        ObjectPath    [OIStringField]  =
+            C:\Users\m3nz95\AppData\Local\Temp\m3nz95_3DModels\PartDB\
+            Packages\User\0404-001650\SAT\PD...
+        ObjectStatus  [OIIntegerField] = 1
+        ObjectDate    [OIDateField]    = Thu Sep 17 14:46:56 KST 2026
+        ObjectUser    [OIStringField]  = admin
+        ★ Object     [OIBlobField]    = BlobImpl  getChunkSize=1048576
+
+### OIBlob 에 쓰기 메서드가 전부 있다
+
+    setInputStream(...)   setBytes(...)   getOutputStream()
+    getMakePermanentStream()   getInputStream()   getBytes()
+    discardCachedInputStream()
+
+매뉴얼 p.35 의 `OIBlob` API 그대로다. **읽기뿐 아니라 쓰기도 가능한 형태다.**
+
+### OIObjectSet 에 행 추가 메서드가 있다
+
+    createLine() -> OIObject      ← 새 첨부 행 생성
+    add(OIObject) -> boolean
+    remove / clear / size / iterator / toArray
+
+→ **`createLine()` 으로 첨부 행을 만들고 그 `Object` 필드에
+   `setInputStream()` 으로 파일을 밀어넣는 경로가 API 상 열려 있다.**
+
+## 49. 그러나 — 첨부된 것은 STEP 이 아니다
+
+결정적 관찰 두 가지.
+
+1. **`FileType = pdf`** — 첨부가 1건뿐이고 그것이 PDF 다.
+2. **`ObjectPath` 에 `\SAT\` 가 들어 있다** —
+   `...\PartDB\Packages\User\0404-001650\SAT\PD...`
+
+SAT 는 ACIS 계열 3D 포맷이다. 즉 이 첨부는 **원본 STEP 이 아니라
+Bulk Import 가 생성한 변환·프리뷰 산출물(3D PDF)** 로 보인다.
+경로가 `%TEMP%\m3nz95_3DModels\...` 인 것도 변환 작업 디렉토리를 시사한다.
+
+30항에서 `Preview3DModel` 이 ACTION 타입이라 한 것과 정합한다.
+
+**→ 사용자 가설을 다시 평가하면:**
+
+| 항목 | 판정 |
+|---|---|
+| `Model3D` 에 BLOB 슬롯이 있나 | **없다** (직접 필드 0개, 변함 없음) |
+| `3DModelsDocuments.FileInformation` 에 BLOB 이 있나 | **있다 ★** (내가 틀렸던 부분) |
+| OI API 로 그 BLOB 에 쓸 수 있나 | **API 상 가능해 보인다** (createLine + setInputStream) |
+| 거기에 STEP 을 넣으면 Bulk Import 와 같아지나 | **아니다** — 현재 첨부는 변환 산출물(pdf/SAT)이다 |
+
+## 50. 수정된 판단
+
+**가능한 것**: OI API 만으로 `Model3D` 객체 + `3DModelsDocuments` 문서 +
+첨부 BLOB 까지 **생성 자체는** 할 수 있을 것으로 보인다. xml-console 도 필요 없다.
+
+**여전히 막힌 것**: Bulk Import 가 하는 일은 파일 적재가 아니라
+**STEP → SAT 변환 + 3D PDF 프리뷰 생성 + 지오메트리 등록**이다.
+원본 STEP 바이트를 첨부에 넣어도 그 변환물이 없으면
+Cockpit 3D 뷰어와 Xpedition 에서 형상이 나오지 않을 가능성이 높다.
+
+즉 **병목은 "파일을 어디에 넣느냐"가 아니라 "지오메트리 변환을
+누가 하느냐"** 였다. 이 부분은 `ACGExecutor → BulkImportWorker.exe`
+네이티브 경로이며 문서화되지 않았다(9항, 44-5항).
+
+## 51. 다음에 확인할 것 (권고 순)
+
+1. **첨부가 정말 1건뿐인지 재확인** — `FileInformation.size()` 를 직접 찍어보고,
+   Cockpit Attachments 탭에서 눈으로 확인. STEP 원본이 별도 첨부로
+   있는데 내가 첫 행만 본 것일 수 있다. **이게 뒤집히면 50항 판단도 바뀐다.**
+2. `ObjectPath` 전체 문자열 확인 (현재 90자에서 잘림).
+   `%TEMP%\m3nz95_3DModels\` 가 임시인지 영구 저장소인지 판별.
+3. Module Guide p.254 의 **"3D Model button — Displays the content of the
+   .STEP model"** 과 대조. STEP 내용을 보여준다면 어딘가에 원본이 있다.
+4. 쓰기 실험은 **테스트 DB 에서** — `createLine()` + `setInputStream()` 으로
+   더미 파일을 넣어보고 Cockpit 에 어떻게 보이는지 확인.
+
+**교훈**: 컨테이너 필드(SET/LIST) 내부를 열지 않고 "없다"고 결론내면 안 된다.
+EDM 데이터 모델은 리스트 프레임 안에 실제 데이터를 두는 패턴을 쓴다.

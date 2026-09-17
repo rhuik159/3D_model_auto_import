@@ -47,6 +47,10 @@ public class EdmProbe {
             System.out.println("[5] WRITE-CAPABILITY PROBE (read-only: no object is created)");
             probeWriteApi(omf);
 
+            System.out.println();
+            System.out.println("[6] 3DModelsDocuments BLOB PROBE (read-only)");
+            probeDocumentBlob(omf);
+
         } catch (Throwable e) {
             System.out.println();
             System.out.println("[오류] " + e.getClass().getName());
@@ -557,6 +561,100 @@ public class EdmProbe {
     }
 
     /**
+     * 3DModelsDocuments 클래스에 BLOB 필드가 있는지, 실제 STEP 바이트가
+     * 들어 있는지 확인한다. (읽기 전용 — 아무것도 쓰지 않는다)
+     *
+     * 사용자 제안 검증: "OI API 로 객체 생성 후 OIBlob 으로 STEP 업로드"
+     * 가 가능하려면 이 클래스에 OIBlobField 가 있어야 한다.
+     */
+    private static void probeDocumentBlob(OIObjectManagerFactory omf) {
+        try {
+            Object cm = omf.getClass().getMethod("getClassManager").invoke(omf);
+            Object arr = cm.getClass().getMethod("getAllClasses").invoke(cm);
+
+            for (Object c : (Object[]) arr) {
+                String path = String.valueOf(c.getClass().getMethod("getPath").invoke(c));
+                if (!path.contains("3DModelsDocuments") && !path.equals("Document")
+                        && !path.equals("Document/RootDocument")) {
+                    continue;
+                }
+                System.out.println("    --- " + path + " ---");
+                Object fs = c.getClass().getMethod("getFields").invoke(c);
+                int blobCount = 0;
+                for (Object f : (Collection<?>) fs) {
+                    String fname = String.valueOf(f.getClass().getMethod("getName").invoke(f));
+                    String iface = "";
+                    for (Class<?> i : f.getClass().getInterfaces()) {
+                        iface = i.getSimpleName();
+                        break;
+                    }
+                    String type = "";
+                    try {
+                        type = String.valueOf(f.getClass().getMethod("getType").invoke(f));
+                    } catch (Exception ignored) {
+                        // 타입 접근자 없음
+                    }
+                    if (iface.toLowerCase().contains("blob") || type.toUpperCase().contains("BLOB")) {
+                        System.out.println("        ★ BLOB FIELD: " + fname + "  [" + iface + "] " + type);
+                        blobCount++;
+                    } else if (fname.toLowerCase().contains("path")
+                            || fname.toLowerCase().contains("file")
+                            || fname.toLowerCase().contains("blob")) {
+                        System.out.println("          " + fname + "  [" + iface + "] " + type);
+                    }
+                }
+                System.out.println("        => direct BLOB field count: " + blobCount);
+
+                // ★ FileInformation 이 SET 이므로 그 안쪽 클래스에 BLOB 이 있을 수 있다.
+                //   Admin 가이드의 110doc_lst 리스트 프레임과 같은 패턴이다.
+                for (Object f : (Collection<?>) fs) {
+                    String fname = String.valueOf(f.getClass().getMethod("getName").invoke(f));
+                    if (!fname.equals("FileInformation")) {
+                        continue;
+                    }
+                    System.out.println("        [FileInformation SET internals]");
+                    for (java.lang.reflect.Method m : f.getClass().getMethods()) {
+                        String mn = m.getName();
+                        if (m.getParameterCount() == 0 && (mn.contains("Class") || mn.contains("Field")
+                                || mn.contains("Frame") || mn.contains("Element")
+                                || mn.contains("Ref") || mn.contains("Target"))) {
+                            try {
+                                Object v = m.invoke(f);
+                                System.out.println("            " + mn + "() = "
+                                        + (v == null ? "null" : v.getClass().getSimpleName() + " : " + describe(v)));
+                                // 반환된 것이 클래스면 그 필드에서 BLOB 을 찾는다
+                                if (v != null && v.getClass().getSimpleName().contains("Class")) {
+                                    try {
+                                        Object inner = v.getClass().getMethod("getFields").invoke(v);
+                                        for (Object inf : (Collection<?>) inner) {
+                                            String ifn = String.valueOf(
+                                                    inf.getClass().getMethod("getName").invoke(inf));
+                                            String iif = "";
+                                            for (Class<?> ii : inf.getClass().getInterfaces()) {
+                                                iif = ii.getSimpleName();
+                                                break;
+                                            }
+                                            String mark = iif.toLowerCase().contains("blob") ? " ★BLOB★" : "";
+                                            System.out.println("                " + ifn + "  [" + iif + "]" + mark);
+                                        }
+                                    } catch (Exception ignored) {
+                                        // 내부 필드 접근 실패
+                                    }
+                                }
+                            } catch (Exception ignored) {
+                                // 해당 접근자 사용 불가
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            Throwable r = (t.getCause() != null) ? t.getCause() : t;
+            System.out.println("    probe failed: " + r.getClass().getSimpleName() + " - " + r.getMessage());
+        }
+    }
+
+    /**
      * Model3D 의 DocumentRef 를 따라가 STEP 파일이 어디 저장되는지 확인한다.
      * 이것이 5단계 자동화 설계의 핵심 질문이다.
      */
@@ -583,6 +681,26 @@ public class EdmProbe {
                     System.out.println("              " + f + " = " + v);
                 }
             }
+            // ★ 실증: 이 Document 에 getBlob() 이 실제로 동작하는지 시도한다.
+            //   스키마에 OIBlobField 가 없어도 런타임에 되는지 확인 (읽기만).
+            System.out.println("              [blob试] getBlob() on known field names:");
+            for (String bf : new String[] { "d_blob", "DocumentBlob", "Blob", "FileBlob",
+                    "Content", "ModelFile", "NativeFile" }) {
+                try {
+                    Object b = doc.getClass().getMethod("getBlob", String.class).invoke(doc, bf);
+                    System.out.println("                " + bf + " -> "
+                            + (b == null ? "null" : "★ " + b.getClass().getSimpleName()));
+                } catch (Exception e) {
+                    Throwable r = (e.getCause() != null) ? e.getCause() : e;
+                    String msg = r.getMessage();
+                    if (msg != null && msg.length() > 70) {
+                        msg = msg.substring(0, 70) + "...";
+                    }
+                    System.out.println("                " + bf + " -> " + r.getClass().getSimpleName()
+                            + ": " + msg);
+                }
+            }
+
             // ★ FileInformation Set 안에 실제 파일 정보가 있다 — STEP 저장 위치의 답
             try {
                 Object set = doc.getClass().getMethod("getSet", String.class).invoke(doc, "FileInformation");
@@ -590,16 +708,55 @@ public class EdmProbe {
                     System.out.println("              FileInformation -> null");
                     return;
                 }
-                java.lang.reflect.Method sNext = null;
-                for (String cand : new String[] { "next", "hasNext" }) {
-                    try {
-                        sNext = set.getClass().getMethod(cand);
-                        break;
-                    } catch (NoSuchMethodException ignored) {
-                        // 다음 후보
-                    }
-                }
                 System.out.println("              FileInformation (" + set.getClass().getSimpleName() + "):");
+                // OIObjectSet 의 실제 API 를 먼저 덤프한다 (Attachments 탭 데이터가 여기 있다)
+                // OIObjectSet 은 표준 Collection 이다 — iterator() 로 순회한다.
+                // 이 안의 각 행이 Cockpit 의 Attachments 탭 한 줄에 대응한다.
+                if (set instanceof Iterable) {
+                    int k = 0;
+                    for (Object el : (Iterable<?>) set) {
+                        k++;
+                        System.out.println("                [" + k + "] " + el.getClass().getSimpleName());
+                        // 이 행 클래스의 필드를 전부 보고, BLOB 이 있는지 확인한다
+                        try {
+                            Object oc2 = el.getClass().getMethod("getOIClass").invoke(el);
+                            System.out.println("                    class="
+                                    + oc2.getClass().getMethod("getPath").invoke(oc2));
+                            Object fl = oc2.getClass().getMethod("getFields").invoke(oc2);
+                            for (Object ff2 : (Collection<?>) fl) {
+                                String fn2 = String.valueOf(ff2.getClass().getMethod("getName").invoke(ff2));
+                                String if2 = "";
+                                for (Class<?> ii : ff2.getClass().getInterfaces()) {
+                                    if2 = ii.getSimpleName();
+                                    break;
+                                }
+                                boolean isBlob = if2.toLowerCase().contains("blob");
+                                Object val = fieldValue(el, fn2);
+                                String shown = (val == null) ? "" : String.valueOf(val);
+                                if (isBlob && val != null) {
+                                    // BLOB 의 실제 크기를 확인한다 (읽기만)
+                                    shown = blobInfo(val);
+                                } else if (shown.length() > 90) {
+                                    shown = shown.substring(0, 90) + "...";
+                                }
+                                System.out.println("                    " + (isBlob ? "★BLOB★ " : "        ")
+                                        + fn2 + " [" + if2 + "] = " + shown);
+                            }
+                        } catch (Exception e) {
+                            System.out.println("                    (field dump failed: "
+                                    + e.getClass().getSimpleName() + ")");
+                        }
+                        if (k >= 8) {
+                            break;
+                        }
+                    }
+                    if (k == 0) {
+                        System.out.println("                (set is empty, size="
+                                + set.getClass().getMethod("size").invoke(set) + ")");
+                    }
+                    return;
+                }
+                java.lang.reflect.Method sNext = null;
                 if (sNext != null && sNext.getName().equals("next")) {
                     int k = 0;
                     java.lang.reflect.Method getEl = null;
@@ -654,6 +811,28 @@ public class EdmProbe {
             System.out.println("            DocumentRef failed: " + r.getClass().getSimpleName()
                     + " - " + r.getMessage());
         }
+    }
+
+    /** OIBlob 의 크기·접근자를 확인한다 (내용은 읽지 않는다). */
+    private static String blobInfo(Object blob) {
+        StringBuilder sb = new StringBuilder(blob.getClass().getSimpleName());
+        for (String g : new String[] { "getSize", "length", "getLength", "getChunkSize" }) {
+            try {
+                Object v = blob.getClass().getMethod(g).invoke(blob);
+                sb.append("  ").append(g).append('=').append(v);
+            } catch (Exception ignored) {
+                // 해당 접근자 없음
+            }
+        }
+        sb.append("  [methods: ");
+        for (java.lang.reflect.Method m : blob.getClass().getMethods()) {
+            String mn = m.getName();
+            if (mn.contains("Stream") || mn.contains("Bytes") || mn.contains("Size")) {
+                sb.append(mn).append(' ');
+            }
+        }
+        sb.append(']');
+        return sb.toString();
     }
 
     /** 객체가 가진 값 접근자를 한 번만 덤프한다 (진단용). */
