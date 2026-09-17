@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "paths": {
+    "sourceShare": "<<SET-ME>>",
+    "designLibrary": "<<SET-ME>>",
+    "dateFolderRoot": "<<SET-ME>>",
+    "stateDir": "./state",
+    "logDir": "./logs",
+    "outputDir": "./output"
+  },
+  "scan": {
+    "includeExtensions": [
+      ".step",
+      ".stp"
+    ],
+    "excludeFolderNames": [
+      "_archive",
+      "temp",
+      "~snapshot"
+    ],
+    "maxFileSizeMB": 500
+  },
+  "robocopy": {
+    "retryCount": 2,
+    "retryWaitSeconds": 5,
+    "threads": 8
+  },
+  "batch": {
+    "folderFormat": "yyyy-MM-dd",
+    "includeModified": true
+  },
+  "retention": {
+    "logDays": 90,
+    "outputCsvDays": 180,
+    "dateFolderDays": 0
+  },
+  "behavior": {
+    "firstRunMode": "BaselineOnly",
+    "failOnZeroFilesFound": true,
+    "hashAlgorithm": "SHA256"
+  },
+  "mapping": {
+    "enabled": true,
+    "mappingFileName": "Mapping.xdm",
+    "alignmentFileName": "Alignment.dat",
+    "vendor": "User"
+  }
+}

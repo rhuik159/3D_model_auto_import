@@ -1,0 +1,12 @@
+# 이 저장소는 줄바꿈을 '있는 그대로' 보존한다.
+#
+# ★ 주의 ★ core.autocrlf 에 맡기지 말 것.
+#   .ps1 은 한글 주석 때문에 UTF-8 BOM 이 필수인데(PowerShell 5.1 에서
+#   BOM 이 없으면 한글이 깨진다), 여기에 줄바꿈 자동변환까지 겹치면
+#   작업 트리 전체가 변경된 것처럼 보여 실제 diff 를 읽을 수 없게 된다.
+* -text
+
+# 바이너리 - 변환/diff 대상 아님
+*.stp  binary
+*.step binary
+*.dat  binary
