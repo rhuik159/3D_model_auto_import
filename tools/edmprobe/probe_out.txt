@@ -1,0 +1,1959 @@
+[1] �α��� ���� 'api_conf_lib' �� ���� �õ�...
+
+	Title: DFO
+	Vendor: Siemens
+	Version: 2.4.1 Build: 2024.33.24128628
+
+    ���� ����
+    DB ����� : xdm-0d7bfecf3c8
+    ����      : 10.102.69.191:31000
+
+[2] Ŭ���� ��� ��ȸ...
+    ClassManager ȹ��: getClassManager()
+    getAllClasses() -> 351 classes
+
+[3] 3D/model related classes:
+    * 3DModelsDocuments
+    * DesignModel
+    * DXModel
+    * ModelDM
+    * Model3D
+    * 3DModel
+    * M3DLModel
+    * M3DLModel/Resistors
+    * M3DLModel/Resistors/Film
+    * M3DLModel/Diodes
+    * M3DLModel/Diodes/Schottky
+    * UserModel
+    * GeneratedModel
+    * Package3D
+    * 3DPackage
+    * M3DLPackage
+    * SeriesFile3D
+    * 3DSeriesFile
+    * M3DLSeriesFile
+    * SimulationModel
+    * SimulationModelCatalog
+    * IBISModels
+    * DefaultModelAssignment
+
+[3b] OIClass available methods (first match):
+      getClassManager() -> OIClassManager
+      getIDField() -> OIField
+      getLabel() -> String
+      declaredFieldIterator() -> Iterator
+      getTopClass() -> OIClass
+      getRootClass() -> OIClass
+      hasSuperclass() -> boolean
+      getSubclasses() -> Collection
+      fieldIterator() -> Iterator
+      getName() -> String
+      getSuperclass() -> OIClass
+      getFields() -> Collection
+      getDeclaredFields() -> Collection
+      getPath() -> String
+      getDelegate() -> Object
+      hashCode() -> int
+      toString() -> String
+      getClass() -> Class
+      notify() -> void
+      notifyAll() -> void
+
+[3c] 3D class detail:
+    --- Model3D ---
+        path  = Model3D
+        label = 3D Model
+        super = (none)
+        fields(25):
+            ModelId
+            obj_lock
+            obj_skn
+            obj_user
+            Vendor
+            ModelName
+            PackageRef
+            PackageType
+            MountType
+            ElectricalLabel
+            SeriesFileRef
+            ModelCatalog
+            Subseries
+            DocumentRef
+            Preview3DModel
+            3DModelToCompRef
+            3DModelToCellRef
+            3DModelToCellRefKey
+            3DModelToCompRefKey
+            ModelToComponentRefKey
+            Model3D_Dyn_id
+            ModifiedBy
+            CreatedAt
+            CreatedBy
+            ModifiedAt
+    --- 3DModel ---
+        path  = Model3D/3DModel
+        label = TOP
+        super = Model3D
+        fields(25):
+            ModelId
+            obj_lock
+            obj_skn
+            obj_user
+            Vendor
+            ModelName
+            PackageRef
+            PackageType
+            MountType
+            ElectricalLabel
+            SeriesFileRef
+            ModelCatalog
+            Subseries
+            DocumentRef
+            Preview3DModel
+            3DModelToCompRef
+            3DModelToCellRef
+            3DModelToCellRefKey
+            3DModelToCompRefKey
+            ModelToComponentRefKey
+            Model3D_Dyn_id
+            ModifiedBy
+            CreatedAt
+            CreatedBy
+            ModifiedAt
+    --- M3DLModel ---
+        path  = Model3D/3DModel/M3DLModel
+        label = M3DL
+        super = 3DModel
+        fields(25):
+            ModelId
+            obj_lock
+            obj_skn
+            obj_user
+            Vendor
+            ModelName
+            PackageRef
+            PackageType
+            MountType
+            ElectricalLabel
+            SeriesFileRef
+            ModelCatalog
+            Subseries
+            DocumentRef
+            Preview3DModel
+            3DModelToCompRef
+            3DModelToCellRef
+            3DModelToCellRefKey
+            3DModelToCompRefKey
+            ModelToComponentRefKey
+            Model3D_Dyn_id
+            ModifiedBy
+            CreatedAt
+            CreatedBy
+            ModifiedAt
+    --- UserModel ---
+        path  = Model3D/3DModel/UserModel
+        label = User
+        super = 3DModel
+        fields(57):
+            UserComponentLength
+            UserComponentWidth
+            UserComponentHeight
+            UserBodyLength
+            UserBodyWidth
+            UserBodyHeight
+            UserBodyDiameter
+            UserBodyDiameter2
+            UserLeadLength
+            UserLeadLength2
+            UserUpperLeadLength
+            UserLeadWidth
+            UserLeadWidth2
+            UserLeadHeight
+            UserLeadDiameter
+            UserLeadSpacing
+            UserLeadSpan
+            UserLeadSpanY
+            UserLeadCount
+            UserLeadGrooveCount
+            UserLeadsPerColumn
+            UserLeadsPerRow
+            UserMass
+            UserPitch
+            UserPitchDiameter
+            ... (32 more)
+    --- DefaultModelAssignment ---
+        path  = DefaultModelAssignment
+        label = 3D Model Assignments
+        super = (none)
+        fields(9):
+            obj_lock
+            obj_user
+            ModelAssignmentName
+            ModelAssignmentExport
+            ModelAssignmentId
+            ModelAssignmentTask
+            ModelAssignmentTimestamp
+            ModelAssignmentCompCatalog
+            EffectiveAssignmentsList
+
+[4] UserModel objects (imported 3D models):
+    [Model3D/3DModel/UserModel] query created: QueryWrapper
+        ID field: ModelId
+        columns added: [ModelId, ModelName, Vendor, ModelCatalog, Subseries, PackageType, DocumentRef, 3DModelToCompRef, 3DModelToCompRefKey, ModelToComponentRefKey]
+        execute() ok -> CursorWrapper
+        cursor methods:
+            getProxyObject() -> OIProxyObject
+            getFetchSize() -> int
+            next() -> boolean
+            getObject() -> OIObject
+            getObjectID() -> String
+            getOIClass() -> OIClass
+            getObjectManager() -> OIObjectManager
+            getDirtyFields() -> Set
+            getMode() -> int
+            getClassName() -> String
+            getDelegate() -> Object
+            hashCode() -> int
+            getClass() -> Class
+        rows:
+        [diag] value accessors on com.mentor.datafusion.oi.internal.model.ObjectWrapper:
+            getObjectID() -> String
+            getSet(String) -> OIObjectSet
+            getBlob(String) -> OIBlob
+            getOIClass() -> OIClass
+            getDate(String) -> Date
+            getStringifiedWithUnit(String) -> String
+            getEEEncryptedBlob(String) -> OIBlob
+            getBitSet(String) -> OIBitSet
+            getOld(String) -> Object
+            getObjectManager() -> OIObjectManager
+            getStringified(String) -> String
+            getDirtyFields() -> Set
+            getWithUnit(String) -> String
+            getMode() -> int
+            getOIField(String) -> OIField
+            get(String) -> Object
+            getDouble(String) -> Double
+            getObject(String) -> OIObject
+            getClassName() -> String
+            getInteger(String) -> Integer
+            getString(String) -> String
+            getDelegate() -> Object
+            getClass() -> Class
+        1. id=null   ModelName=wjTest  Vendor=User  ModelCatalog=User  Subseries=wjTest  DocumentRef=com.mentor.datafusion.dfo.dfoimpl.model.DFObjectImpl@31006a75  
+        2. id=null   ModelName=0402C  Vendor=User  ModelCatalog=User  Subseries=0402C  DocumentRef=com.mentor.datafusion.dfo.dfoimpl.model.DFObjectImpl@6fced25c  
+        3. id=null   ModelName=1206R  Vendor=User  ModelCatalog=User  Subseries=1206R  DocumentRef=com.mentor.datafusion.dfo.dfoimpl.model.DFObjectImpl@299fc582  
+        4. id=null   ModelName=0402R  Vendor=User  ModelCatalog=User  Subseries=0402R  DocumentRef=com.mentor.datafusion.dfo.dfoimpl.model.DFObjectImpl@305aaedf  
+        5. id=null   ModelName=063R_temp  Vendor=User  ModelCatalog=User  Subseries=063R_temp  DocumentRef=com.mentor.datafusion.dfo.dfoimpl.model.DFObjectImpl@2a425cf5  
+        6. id=null   ModelName=063R_temp  Vendor=User  ModelCatalog=User  Subseries=063R_temp  DocumentRef=com.mentor.datafusion.dfo.dfoimpl.model.DFObjectImpl@2a425cf5  
+        7. id=null   ModelName=063R_temp  Vendor=User  ModelCatalog=User  Subseries=063R_temp  DocumentRef=com.mentor.datafusion.dfo.dfoimpl.model.DFObjectImpl@2a425cf5  
+        8. id=null   ModelName=0404-001650  Vendor=User  ModelCatalog=User  Subseries=0404-001650  DocumentRef=com.mentor.datafusion.dfo.dfoimpl.model.DFObjectImpl@17d76ebb  
+            DocumentRef -> ObjectWrapper
+              class = 3DModelsDocuments  path=Document/RootDocument/3DModelsDocuments
+              DocumentName = User:0404-001650
+              DocumentKey = User:0404-001650:1:1
+              TitleOfDocument = User:0404-001650
+              CheckOutStatus = 0
+              MajorVersion = 01
+              MinorVersion = 1
+              [blob?] getBlob() on known field names:
+                d_blob -> OIFieldNotFoundException: Field d_blob not found in class 3DModelsDocuments
+                DocumentBlob -> OIFieldNotFoundException: Field DocumentBlob not found in class 3DModelsDocuments
+                Blob -> OIFieldNotFoundException: Field Blob not found in class 3DModelsDocuments
+                FileBlob -> OIFieldNotFoundException: Field FileBlob not found in class 3DModelsDocuments
+                Content -> OIFieldNotFoundException: Field Content not found in class 3DModelsDocuments
+                ModelFile -> OIFieldNotFoundException: Field ModelFile not found in class 3DModelsDocuments
+                NativeFile -> OIFieldNotFoundException: Field NativeFile not found in class 3DModelsDocuments
+              FileInformation (ObjectSetWrapper):
+                size() = 1
+                [1] InnerObjectWrapper
+                    class=null
+                            ViewDocument [OIActionField] = 
+                            Index [OIIntegerField] = 1
+                            Vault [OIStringField] = Default
+                            FileType [OIStringField] = pdf
+                            ObjectPath [OIStringField] = C:\Users\m3nz95\AppData\Local\Temp\m3nz95_3DModels\PartDB\Packages\User\0404-001650\SAT\PDF\0404-001650_1.pdf
+                            ObjectStatus [OIIntegerField] = 1
+                            ObjectDate [OIDateField] = Thu Sep 17 14:46:56 KST 2026
+                            ObjectUser [OIStringField] = admin
+                    ��BLOB�� Object [OIBlobField] = BlobImpl  getChunkSize=1048576  [methods: getChunkSize setInputStream setInputStream setInputStream getOutputStream discardCachedInputStream getMakePermanentStream getBytes getInputStream setBytes ]
+        9. id=null   ModelName=0404-001651  Vendor=User  ModelCatalog=User  Subseries=0404-001651  DocumentRef=com.mentor.datafusion.dfo.dfoimpl.model.DFObjectImpl@7f2c995b  
+            DocumentRef -> ObjectWrapper
+              class = 3DModelsDocuments  path=Document/RootDocument/3DModelsDocuments
+              DocumentName = User:0404-001651
+              DocumentKey = User:0404-001651:1:1
+              TitleOfDocument = User:0404-001651
+              CheckOutStatus = 0
+              MajorVersion = 01
+              MinorVersion = 1
+              [blob?] getBlob() on known field names:
+                d_blob -> OIFieldNotFoundException: Field d_blob not found in class 3DModelsDocuments
+                DocumentBlob -> OIFieldNotFoundException: Field DocumentBlob not found in class 3DModelsDocuments
+                Blob -> OIFieldNotFoundException: Field Blob not found in class 3DModelsDocuments
+                FileBlob -> OIFieldNotFoundException: Field FileBlob not found in class 3DModelsDocuments
+                Content -> OIFieldNotFoundException: Field Content not found in class 3DModelsDocuments
+                ModelFile -> OIFieldNotFoundException: Field ModelFile not found in class 3DModelsDocuments
+                NativeFile -> OIFieldNotFoundException: Field NativeFile not found in class 3DModelsDocuments
+              FileInformation (ObjectSetWrapper):
+                size() = 1
+                [1] InnerObjectWrapper
+                    class=null
+                            ViewDocument [OIActionField] = 
+                            Index [OIIntegerField] = 1
+                            Vault [OIStringField] = Default
+                            FileType [OIStringField] = pdf
+                            ObjectPath [OIStringField] = C:\Users\m3nz95\AppData\Local\Temp\m3nz95_3DModels\PartDB\Packages\User\0404-001651\SAT\PDF\0404-001651_1.pdf
+                            ObjectStatus [OIIntegerField] = 1
+                            ObjectDate [OIDateField] = Thu Sep 17 14:47:02 KST 2026
+                            ObjectUser [OIStringField] = admin
+                    ��BLOB�� Object [OIBlobField] = BlobImpl  getChunkSize=1048576  [methods: getChunkSize setInputStream setInputStream setInputStream getOutputStream discardCachedInputStream getMakePermanentStream getBytes getInputStream setBytes ]
+        10. id=null   ModelName=2007-007741  Vendor=User  ModelCatalog=User  Subseries=2007-007741  DocumentRef=com.mentor.datafusion.dfo.dfoimpl.model.DFObjectImpl@3f3c5ecd  
+        11. id=null   ModelName=2007-008047  Vendor=User  ModelCatalog=User  Subseries=2007-008047  DocumentRef=com.mentor.datafusion.dfo.dfoimpl.model.DFObjectImpl@1179fc8c  
+        total listed: 11
+
+[5] WRITE-CAPABILITY PROBE (read-only: no object is created)
+    (a) write-ish methods on OIObjectManager:
+        createQuery(String, boolean) -> OIQuery
+        createQuery(OIClass, boolean) -> OIQuery
+        makePermanent(OIObject) -> void
+        makePermanent(Collection) -> void
+        refreshAndLockObject(OIObject) -> void
+        refreshAndLockObject(Collection) -> void
+        deleteObject(OIObject) -> void
+        refreshObject(Collection) -> void
+        refreshObject(OIObject) -> void
+        createObject(String) -> OIObject
+
+    (b) Model3D field types (looking for BLOB):
+        --- Model3D ---
+            Vendor  [OIStringField] Type=STRING
+            ModelName  [OIStringField] Type=STRING
+            PackageRef  [OIReferenceField] Type=REFERENCE
+            SeriesFileRef  [OIReferenceField] Type=REFERENCE
+            DocumentRef  [OIReferenceField] Type=REFERENCE
+            Preview3DModel  [OIActionField] Type=ACTION
+            3DModelToCompRef  [OIReferenceField] Type=REFERENCE
+            3DModelToCellRef  [OIReferenceField] Type=REFERENCE
+            3DModelToCellRefKey  [OIStringField] Type=STRING
+            3DModelToCompRefKey  [OIStringField] Type=STRING
+            ModelToComponentRefKey  [OIStringField] Type=STRING
+        --- Model3D/3DModel/UserModel ---
+            Vendor  [OIStringField] Type=STRING
+            ModelName  [OIStringField] Type=STRING
+            PackageRef  [OIReferenceField] Type=REFERENCE
+            SeriesFileRef  [OIReferenceField] Type=REFERENCE
+            DocumentRef  [OIReferenceField] Type=REFERENCE
+            Preview3DModel  [OIActionField] Type=ACTION
+            3DModelToCompRef  [OIReferenceField] Type=REFERENCE
+            3DModelToCellRef  [OIReferenceField] Type=REFERENCE
+            3DModelToCellRefKey  [OIStringField] Type=STRING
+            3DModelToCompRefKey  [OIStringField] Type=STRING
+            ModelToComponentRefKey  [OIStringField] Type=STRING
+
+    (c) classes that DO have BLOB fields (where file bytes live):
+        Picture  ->  PictureBlob
+        VariantBOM  ->  VariantBlob
+        Mapping  ->  HkpBlob
+        Mapping/RootMapping  ->  HkpBlob
+        Mapping/RootMapping/SMC  ->  HkpBlob
+        Mapping/RootMapping/SMC/M04_diode  ->  HkpBlob
+        Mapping/RootMapping/SMC/M05_transistor  ->  HkpBlob
+        Mapping/RootMapping/SMC/M06_07_opto_elec  ->  HkpBlob
+        Mapping/RootMapping/SMC/M08_logic_ic  ->  HkpBlob
+        Mapping/RootMapping/SMC/M09_micro_processor  ->  HkpBlob
+        Mapping/RootMapping/SMC/M10_interface_ic  ->  HkpBlob
+        Mapping/RootMapping/SMC/M11_memory_ic  ->  HkpBlob
+        Mapping/RootMapping/SMC/M12_linear_ic  ->  HkpBlob
+        Mapping/RootMapping/SMC/M13_asic_hybrid  ->  HkpBlob
+        Mapping/RootMapping/SMC/M14_other_active_device  ->  HkpBlob
+        Mapping/RootMapping/SMC/M20_fixed_resistor  ->  HkpBlob
+        Mapping/RootMapping/SMC/M22_ceramic_capacitor  ->  HkpBlob
+        Mapping/RootMapping/SMC/M24_electrolytic_capacitor  ->  HkpBlob
+        Mapping/RootMapping/SMC/M26_transformer  ->  HkpBlob
+        Mapping/RootMapping/SMC/M27_inductor_coil  ->  HkpBlob
+        Mapping/RootMapping/SMC/M28_oscillator  ->  HkpBlob
+        Mapping/RootMapping/SMC/M29_filter  ->  HkpBlob
+        Mapping/RootMapping/SMC/M30_audio_parts  ->  HkpBlob
+        Mapping/RootMapping/SMC/M32_sensor  ->  HkpBlob
+        Mapping/RootMapping/SMC/M33_magnetic_parts  ->  HkpBlob
+        Mapping/RootMapping/SMC/M34_switch  ->  HkpBlob
+        Mapping/RootMapping/SMC/M37_connector  ->  HkpBlob
+        Mapping/RootMapping/SMC/M42_antenna  ->  HkpBlob
+        Mapping/RootMapping/SMC/M43_battery  ->  HkpBlob
+        Mapping/RootMapping/SMC/M47_miscellaneous_e_p  ->  HkpBlob
+        Mapping/RootMapping/SMC/M59_complex_unit  ->  HkpBlob
+        Mapping/RootMapping/SMC/M61_98_steel_parts  ->  HkpBlob
+        Mapping/RootMapping/SMC/M99_etc_parts  ->  HkpBlob
+        Mapping/RootMapping/SMC/Mechanical_parts  ->  HkpBlob
+        Mapping/RootMapping/SMC/TEST_partition  ->  HkpBlob
+        Mapping/RootMapping/SMC/TEST_partition_02  ->  HkpBlob
+        Mapping/RootMapping/SMC/Test_partition_03  ->  HkpBlob
+        Mapping/RootMapping/SMC/Test_partition_04  ->  HkpBlob
+        Mapping/RootMapping/SMC/PartQuest  ->  HkpBlob
+        DXSymbol  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/Borders  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/Globals  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M04_diode  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M05_transistor  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M06_07_opto_elec  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M08_logic_ic  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M09_micro_processor  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M10_interface_ic  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M11_memory_ic  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M12_linear_ic  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M13_asic_hybrid  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M14_other_active_device  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M20_fixed_resistor  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M22_ceramic_capacitor  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M24_electrolytic_capacitor  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M26_transformer  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M27_inductor_coil  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M28_oscillator  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M29_filter  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M30_audio_parts  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M32_sensor  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M33_magnetic_parts  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M34_switch  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M37_connector  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M42_antenna  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M43_battery  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M47_miscellaneous_e_p  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M59_complex_unit  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M61_98_steel_parts  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M99_etc_parts  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/Mechanical_parts  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/builtin  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/gen_lib  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/M06_07_opto_electric  ->  HkpBlob, OleBlob
+        DXSymbol/SymbolDS/SMC/PartQuest  ->  HkpBlob, OleBlob
+        DXModel  ->  HkpBlob
+        DXModel/ModelDM  ->  HkpBlob
+        DXModel/ModelDM/SMC  ->  HkpBlob
+        DXModel/ModelDM/SMC/Spice  ->  HkpBlob
+        DXModel/ModelDM/SMC/Spice/SPICE_P1  ->  HkpBlob
+        Cells  ->  HkpBlob
+        Cells/Cell  ->  HkpBlob
+        Cells/Cell/SMC  ->  HkpBlob
+        Cells/Cell/SMC/sm_geoms__con  ->  HkpBlob
+        Cells/Cell/SMC/sm_geoms_audio  ->  HkpBlob
+        Cells/Cell/SMC/sm_geoms_bga  ->  HkpBlob
+        Cells/Cell/SMC/sm_geoms_chip  ->  HkpBlob
+        Cells/Cell/SMC/sm_geoms_disc  ->  HkpBlob
+        Cells/Cell/SMC/sm_geoms_etc  ->  HkpBlob
+        Cells/Cell/SMC/sm_geoms_keypad  ->  HkpBlob
+        Cells/Cell/SMC/sm_geoms_mod  ->  HkpBlob
+        Cells/Cell/SMC/sm_geoms_mpad  ->  HkpBlob
+        Cells/Cell/SMC/sm_geoms_osc  ->  HkpBlob
+        Cells/Cell/SMC/sm_geoms_pccon  ->  HkpBlob
+        Cells/Cell/SMC/sm_geoms_qf  ->  HkpBlob
+        Cells/Cell/SMC/sm_geoms_qfp  ->  HkpBlob
+        Cells/Cell/SMC/sm_geoms_so  ->  HkpBlob
+        Cells/Cell/SMC/sm_geoms_sop  ->  HkpBlob
+        Cells/Cell/SMC/sm_geoms_sot  ->  HkpBlob
+        Cells/Cell/SMC/sm_geoms_steel  ->  HkpBlob
+        Cells/Cell/SMC/sm_geoms_sw  ->  HkpBlob
+        Cells/Cell/SMC/sm_padstacks  ->  HkpBlob
+        Cells/Cell/SMC/smd_pad  ->  HkpBlob
+        Cells/Cell/SMC/th_geoms_conn_d_con  ->  HkpBlob
+        Cells/Cell/SMC/th_geoms_disc_coil  ->  HkpBlob
+        Cells/Cell/SMC/th_geoms_disc_tp  ->  HkpBlob
+        Cells/Cell/SMC/th_geoms_pga  ->  HkpBlob
+        Cells/Cell/SMC/Temp_Cell  ->  HkpBlob
+        Cells/Cell/SMC/Connector  ->  HkpBlob
+        Cells/Cell/SMC/Mechanical  ->  HkpBlob
+        Cells/Cell/SMC/PartQuest  ->  HkpBlob
+        Padstacks  ->  HkpBlob
+        Pads  ->  HkpBlob
+        Holes  ->  HkpBlob
+        CustomDrillSymbols  ->  HkpBlob
+        Package3D  ->  PackageBlob
+        Package3D/3DPackage  ->  PackageBlob
+        Package3D/3DPackage/M3DLPackage  ->  PackageBlob
+        Package3D/3DPackage/UserPackage  ->  PackageNativeBlob, PackageBlob
+        SeriesFile3D  ->  SeriesFileBlob
+        SeriesFile3D/3DSeriesFile  ->  SeriesFileBlob
+        SeriesFile3D/3DSeriesFile/M3DLSeriesFile  ->  SeriesFileBlob
+        SeriesFile3D/3DSeriesFile/UserSeriesFile  ->  SeriesFileBlob
+        Connector  ->  NativeBlob
+        DynamicReusableBlocks  ->  Object
+        ObjectClass  ->  IconBlob
+        CatalogGroup  ->  IconBlob
+        EdxConfiguration  ->  EdxMappingBlob
+        Bundle  ->  Blob
+        LibraryCacheDataRequest  ->  RequestBlob, ItemsBlob, ResultBlob
+
+    (d) 3DModelsDocuments / Document-ish class fields:
+        --- Document ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CAEVault ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CAEVault/NNAAMGCComponent ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CAEVault/NNAAMGCComponent/TarBall1 ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CAEVault/NNAAMGCComponent/AxelTextFile ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CAEVault/NNAAMGCComponent/SimulationSupportFile ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CAEVault/Geometry ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CAEVault/Geometry/TarBall2 ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CAEVault/Geometry/PackageDataFile ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CAEVault/Geometry/GeomNeutralFile ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CAEVault/NNAAACPadstack ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CAEVault/NNAAACPadstack/TarBall3 ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CAEVault/NNAAACPadstack/PadstackNeutralFile ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CAEVault/Configuration ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CAEVault/Configuration/Axel ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CAEVault/Configuration/GeomGenie ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CAEVault/ReportFile ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CompVault ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CompVault/ComponentDatasheet ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CompVault/FirmwareProgram ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CADVault ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CADVault/PCBAssemblyDrawing ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CADVault/CADDesignArchive ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CADVault/PCBManufacturingFile ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CADVault/Firmware ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CADVault/BareBoardDrawing ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CADVault/BareBoardFabricationFile ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/CADVault/SchematicDrawing ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/ProjectVault ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/ProjectVault/Specification ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/ProjectVault/Requirement ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/Miscellaneous ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/Document Manager ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+        --- Document/RootDocument/3DModelsDocuments ---
+            RefComponent  [OIStringField]
+            Catalog  [OIReferenceField]
+            TitleOfDocument  [OIStringField]
+            RequestLink  [OISetField]
+            DocumentName  [OIStringField]
+            DocumentKey  [OIStringField]
+            ProcessStep  [OIStringField]
+            LongDescription  [OIStringField]
+            CatalogGroup  [OIStringField]
+            Component  [OIReferenceField]
+            CheckOutStatus  [OIIntegerField]
+            CreationDate  [OIDateField]
+            Release  [OIStringField]
+            LastModifiedDate  [OIDateField]
+            NRequestId  [OIReferenceField]
+            MajorMinorVersion  [OIStringField]
+            Date  [OIDateField]
+            Path  [OIStringField]
+            Status  [OIIntegerField]
+            User  [OIStringField]
+            ProcessState  [OIStringField]
+            FileInformation  [OISetField]
+            MajorVersionInt  [OIIntegerField]
+            MajorVersion  [OIStringField]
+            MinorVersionInt  [OIIntegerField]
+            MinorVersion  [OIStringField]
+            FreezeForPrune  [OIIntegerField]
+            Sequence  [OIIntegerField]
+            Validity  [OIIntegerField]
+            pathModified  [OIIntegerField]
+            PredecessorVersion  [OIReferenceField]
+            LastVersion  [OIIntegerField]
+            ValidDate  [OIDateField]
+            InvalidDate  [OIDateField]
+            VersionDescr  [OIStringField]
+
+[6] 3DModelsDocuments BLOB PROBE (read-only)
+    --- Document ---
+          Path  [OIStringField] STRING
+          FileInformation  [OISetField] SET
+          pathModified  [OIIntegerField] INTEGER
+        => direct BLOB field count: 0
+        [FileInformation SET internals]
+            getDeclaringClass() = ClassWrapper : Document
+                RefComponent  [OIStringField]
+                obj_extrf  [OIIntegerField]
+                obj_id_1  [OIStringField]
+                obj_lock  [OIIntegerField]
+                obj_refco  [OIIntegerField]
+                obj_skn  [OIReferenceField]
+                obj_stsys  [OIIntegerField]
+                obj_user  [OIStringField]
+                Catalog  [OIReferenceField]
+                TitleOfDocument  [OIStringField]
+                RequestLink  [OISetField]
+                DocumentName  [OIStringField]
+                DocumentKey  [OIStringField]
+                ProcessStep  [OIStringField]
+                LongDescription  [OIStringField]
+                CatalogGroup  [OIStringField]
+                CheckedOutBy  [OIStringField]
+                Component  [OIReferenceField]
+                CreatedBy  [OIStringField]
+                CheckOutStatus  [OIIntegerField]
+                CreationDate  [OIDateField]
+                LastModifiedBy  [OIStringField]
+                Release  [OIStringField]
+                LastModifiedDate  [OIDateField]
+                NRequestId  [OIReferenceField]
+                MajorMinorVersion  [OIStringField]
+                Date  [OIDateField]
+                Path  [OIStringField]
+                Status  [OIIntegerField]
+                User  [OIStringField]
+                ProcessState  [OIStringField]
+                FileInformation  [OISetField]
+                MajorVersionInt  [OIIntegerField]
+                MajorVersion  [OIStringField]
+                MinorVersionInt  [OIIntegerField]
+                MinorVersion  [OIStringField]
+                FreezeForPrune  [OIIntegerField]
+                Sequence  [OIIntegerField]
+                Validity  [OIIntegerField]
+                pathModified  [OIIntegerField]
+                PredecessorVersion  [OIReferenceField]
+                LastVersion  [OIIntegerField]
+                ValidDate  [OIDateField]
+                InvalidDate  [OIDateField]
+                VersionDescr  [OIStringField]
+            getClass() = Class : com.mentor.datafusion.oi.internal.model.ObjectSetFieldWrapper
+    --- Document/RootDocument ---
+          Path  [OIStringField] STRING
+          FileInformation  [OISetField] SET
+          pathModified  [OIIntegerField] INTEGER
+        => direct BLOB field count: 0
+        [FileInformation SET internals]
+            getDeclaringClass() = ClassWrapper : Document
+                RefComponent  [OIStringField]
+                obj_extrf  [OIIntegerField]
+                obj_id_1  [OIStringField]
+                obj_lock  [OIIntegerField]
+                obj_refco  [OIIntegerField]
+                obj_skn  [OIReferenceField]
+                obj_stsys  [OIIntegerField]
+                obj_user  [OIStringField]
+                Catalog  [OIReferenceField]
+                TitleOfDocument  [OIStringField]
+                RequestLink  [OISetField]
+                DocumentName  [OIStringField]
+                DocumentKey  [OIStringField]
+                ProcessStep  [OIStringField]
+                LongDescription  [OIStringField]
+                CatalogGroup  [OIStringField]
+                CheckedOutBy  [OIStringField]
+                Component  [OIReferenceField]
+                CreatedBy  [OIStringField]
+                CheckOutStatus  [OIIntegerField]
+                CreationDate  [OIDateField]
+                LastModifiedBy  [OIStringField]
+                Release  [OIStringField]
+                LastModifiedDate  [OIDateField]
+                NRequestId  [OIReferenceField]
+                MajorMinorVersion  [OIStringField]
+                Date  [OIDateField]
+                Path  [OIStringField]
+                Status  [OIIntegerField]
+                User  [OIStringField]
+                ProcessState  [OIStringField]
+                FileInformation  [OISetField]
+                MajorVersionInt  [OIIntegerField]
+                MajorVersion  [OIStringField]
+                MinorVersionInt  [OIIntegerField]
+                MinorVersion  [OIStringField]
+                FreezeForPrune  [OIIntegerField]
+                Sequence  [OIIntegerField]
+                Validity  [OIIntegerField]
+                pathModified  [OIIntegerField]
+                PredecessorVersion  [OIReferenceField]
+                LastVersion  [OIIntegerField]
+                ValidDate  [OIDateField]
+                InvalidDate  [OIDateField]
+                VersionDescr  [OIStringField]
+            getClass() = Class : com.mentor.datafusion.oi.internal.model.ObjectSetFieldWrapper
+    --- Document/RootDocument/3DModelsDocuments ---
+          Path  [OIStringField] STRING
+          FileInformation  [OISetField] SET
+          pathModified  [OIIntegerField] INTEGER
+        => direct BLOB field count: 0
+        [FileInformation SET internals]
+            getDeclaringClass() = ClassWrapper : Document
+                RefComponent  [OIStringField]
+                obj_extrf  [OIIntegerField]
+                obj_id_1  [OIStringField]
+                obj_lock  [OIIntegerField]
+                obj_refco  [OIIntegerField]
+                obj_skn  [OIReferenceField]
+                obj_stsys  [OIIntegerField]
+                obj_user  [OIStringField]
+                Catalog  [OIReferenceField]
+                TitleOfDocument  [OIStringField]
+                RequestLink  [OISetField]
+                DocumentName  [OIStringField]
+                DocumentKey  [OIStringField]
+                ProcessStep  [OIStringField]
+                LongDescription  [OIStringField]
+                CatalogGroup  [OIStringField]
+                CheckedOutBy  [OIStringField]
+                Component  [OIReferenceField]
+                CreatedBy  [OIStringField]
+                CheckOutStatus  [OIIntegerField]
+                CreationDate  [OIDateField]
+                LastModifiedBy  [OIStringField]
+                Release  [OIStringField]
+                LastModifiedDate  [OIDateField]
+                NRequestId  [OIReferenceField]
+                MajorMinorVersion  [OIStringField]
+                Date  [OIDateField]
+                Path  [OIStringField]
+                Status  [OIIntegerField]
+                User  [OIStringField]
+                ProcessState  [OIStringField]
+                FileInformation  [OISetField]
+                MajorVersionInt  [OIIntegerField]
+                MajorVersion  [OIStringField]
+                MinorVersionInt  [OIIntegerField]
+                MinorVersion  [OIStringField]
+                FreezeForPrune  [OIIntegerField]
+                Sequence  [OIIntegerField]
+                Validity  [OIIntegerField]
+                pathModified  [OIIntegerField]
+                PredecessorVersion  [OIReferenceField]
+                LastVersion  [OIIntegerField]
+                ValidDate  [OIDateField]
+                InvalidDate  [OIDateField]
+                VersionDescr  [OIStringField]
+            getClass() = Class : com.mentor.datafusion.oi.internal.model.ObjectSetFieldWrapper
+
+[7] CLASS NUMBERS (for xml-console class= attribute)
+    class=110   Document   idField=DocumentKey
+    class=110   Document/RootDocument   idField=DocumentKey
+    class=110   Document/RootDocument/CAEVault   idField=DocumentKey
+    class=110   Document/RootDocument/CAEVault/NNAAMGCComponent   idField=DocumentKey
+    class=110   Document/RootDocument/CAEVault/NNAAMGCComponent/TarBall1   idField=DocumentKey
+    class=110   Document/RootDocument/CAEVault/NNAAMGCComponent/AxelTextFile   idField=DocumentKey
+    class=110   Document/RootDocument/CAEVault/NNAAMGCComponent/SimulationSupportFile   idField=DocumentKey
+    class=110   Document/RootDocument/CAEVault/Geometry   idField=DocumentKey
+    class=110   Document/RootDocument/CAEVault/Geometry/TarBall2   idField=DocumentKey
+    class=110   Document/RootDocument/CAEVault/Geometry/PackageDataFile   idField=DocumentKey
+    class=110   Document/RootDocument/CAEVault/Geometry/GeomNeutralFile   idField=DocumentKey
+    class=110   Document/RootDocument/CAEVault/NNAAACPadstack   idField=DocumentKey
+    class=110   Document/RootDocument/CAEVault/NNAAACPadstack/TarBall3   idField=DocumentKey
+    class=110   Document/RootDocument/CAEVault/NNAAACPadstack/PadstackNeutralFile   idField=DocumentKey
+    class=110   Document/RootDocument/CAEVault/Configuration   idField=DocumentKey
+    class=110   Document/RootDocument/CAEVault/Configuration/Axel   idField=DocumentKey
+    class=110   Document/RootDocument/CAEVault/Configuration/GeomGenie   idField=DocumentKey
+    class=110   Document/RootDocument/CAEVault/ReportFile   idField=DocumentKey
+    class=110   Document/RootDocument/CompVault   idField=DocumentKey
+    class=110   Document/RootDocument/CompVault/ComponentDatasheet   idField=DocumentKey
+    class=110   Document/RootDocument/CompVault/FirmwareProgram   idField=DocumentKey
+    class=110   Document/RootDocument/CADVault   idField=DocumentKey
+    class=110   Document/RootDocument/CADVault/PCBAssemblyDrawing   idField=DocumentKey
+    class=110   Document/RootDocument/CADVault/CADDesignArchive   idField=DocumentKey
+    class=110   Document/RootDocument/CADVault/PCBManufacturingFile   idField=DocumentKey
+    class=110   Document/RootDocument/CADVault/Firmware   idField=DocumentKey
+    class=110   Document/RootDocument/CADVault/BareBoardDrawing   idField=DocumentKey
+    class=110   Document/RootDocument/CADVault/BareBoardFabricationFile   idField=DocumentKey
+    class=110   Document/RootDocument/CADVault/SchematicDrawing   idField=DocumentKey
+    class=110   Document/RootDocument/ProjectVault   idField=DocumentKey
+    class=110   Document/RootDocument/ProjectVault/Specification   idField=DocumentKey
+    class=110   Document/RootDocument/ProjectVault/Requirement   idField=DocumentKey
+    class=110   Document/RootDocument/Miscellaneous   idField=DocumentKey
+    class=110   Document/RootDocument/Document Manager   idField=DocumentKey
+    class=110   Document/RootDocument/3DModelsDocuments   idField=DocumentKey
+    class=295   Model3D   idField=ModelId
+    class=295   Model3D/3DModel   idField=ModelId
+    class=295   Model3D/3DModel/M3DLModel   idField=ModelId
+    class=295   Model3D/3DModel/M3DLModel/M3DLModel/Resistors   idField=ModelId
+    class=295   Model3D/3DModel/M3DLModel/M3DLModel/Resistors/M3DLModel/Resistors/Film   idField=ModelId
+    class=295   Model3D/3DModel/M3DLModel/M3DLModel/Diodes   idField=ModelId
+    class=295   Model3D/3DModel/M3DLModel/M3DLModel/Diodes/M3DLModel/Diodes/Schottky   idField=ModelId
+    class=295   Model3D/3DModel/UserModel   idField=ModelId
+    class=295   Model3D/3DModel/GeneratedModel   idField=ModelId
+    class=296   Package3D/3DPackage   idField=PackageId
+    class=296   Package3D/3DPackage/M3DLPackage   idField=PackageId
+    class=296   Package3D/3DPackage/UserPackage   idField=PackageId
+
+���� ����.

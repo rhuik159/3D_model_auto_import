@@ -1394,3 +1394,109 @@ Cockpit 3D 뷰어와 Xpedition 에서 형상이 나오지 않을 가능성이 �
 
 **교훈**: 컨테이너 필드(SET/LIST) 내부를 열지 않고 "없다"고 결론내면 안 된다.
 EDM 데이터 모델은 리스트 프레임 안에 실제 데이터를 두는 패턴을 쓴다.
+
+---
+
+# 【역공학 시도 2026-09-17 21시】 3DLT.exe — 상당히 진전했으나 마지막 벽
+
+사용자 요청으로 `BulkImportWorker.exe` 역공학 가능성을 타진했다.
+결과적으로 **대상 실행파일이 달랐고**, 스위치 규격까지는 확보했으나
+실행에는 실패했다.
+
+## 52. 정정 — 변환 엔진은 3DLT.exe 다
+
+9항에서 `BulkImportWorker.exe` 를 지목했으나 틀렸다.
+`NativeFormatModelImporter`(Bulk Import GUI 워커)를 열어보니
+**`ACGExecutor` 를 거쳐 `ACG_EXECUTABLE` 을 실행**하며,
+`ACGExecutor` 문자열에 **`/3DLT` + `.exe`** 가 들어 있다.
+
+    NativeFormatModelImporter
+      -> ACGExecutor  (ACG_DIR, ACG_EXECUTABLE, buildHandshake,
+                       -library, -importLibrary, prependLibPath)
+        -> C:\MentorGraphics\EEVX.2.14.1\SDD_HOME\common3D\win64\bin\3DLT.exe
+
+즉 **Bulk Import 와 ACG(템플릿 생성)가 같은 실행파일을 모드만 바꿔 쓴다.**
+
+## 53. ★ 3DLT.exe 규격 확보 ★
+
+`3DLT.exe` 는 **.NET 애플리케이션**이다 (`XRApp.XRApp`).
+인자 부족 시 스택 트레이스가 그대로 노출된다.
+
+    System.IndexOutOfRangeException
+       at XRApp.XRApp.CheckInput(String[] args)
+       at XRApp.XRApp.Run(String[] args)
+       at XRApp.XRApp.Main(String[] args)
+
+### 동작 모드 (바이너리에서 추출)
+
+    kXRAppMode_ImportLibrary    ← Bulk Import
+    kXRAppMode_MakePart         ← 템플릿 모델 생성
+    kXRAppMode_MakePartCPN
+    kXRAppMode_Standalone       ← 단독 실행 모드가 존재한다
+    kXRAppMode_Unknown
+
+### 전체 CLI 스위치 (UTF-16 문자열에서 추출)
+
+    -importLibrary
+    -library <name>
+    -addManufacturerPart
+    -customerPartNumber
+    -handshk=<token>
+    -log <path>
+    -project
+    -PadsPro
+
+## 54. 실행 시도 결과 — exit -1 에서 막힘
+
+| 인자 | 결과 |
+|---|---|
+| `-help` / `-?` / `--help` | `IndexOutOfRangeException` (인자 개수 부족) |
+| `-importLibrary` | 동일 예외 |
+| **`-importLibrary -library User`** | **exit -1** — 파싱은 통과, 실행에서 실패 |
+| `-importLibrary -library User -handshk=dummy` | exit -1 |
+| `-importLibrary -library User -log <path>` | exit -1, **로그 파일 생성 안 됨** |
+
+인자 2개를 주면 `IndexOutOfRange` 가 사라진다.
+**즉 인자 파싱 단계는 통과했고 그 이후에서 실패한다.**
+다만 stdout/stderr 가 비어 있고 `-log` 도 파일을 남기지 않아
+실패 원인을 알 수 없다.
+
+### 미충족 추정 조건
+
+`ACGExecutor` 가 프로세스를 띄울 때 함께 구성하는 것들이다.
+
+    ACG_DIR              환경변수
+    ACG_EXECUTABLE       환경변수
+    M3DLRoot             (getM3dlRoot)
+    M3DL work directory  (getM3DLWorkDirectory)
+    prependLibPath       common3D\win64\lib 를 PATH 앞에 추가
+    buildHandshake       HandshakeGenerator 가 만든 토큰
+
+`HandshakeGenerator` 는 난독화돼 있고 시그니처가
+`([B, String, String) -> String` 이다. 바이트 배열을 받아 토큰을 만든다.
+**이 생성 규약을 알아내려면 본격적인 역공학이 필요하다.**
+
+## 55. 효율성 판단 — 여기서 중단을 권한다
+
+**진전한 것**: 실행파일 특정, 동작 모드 5종, CLI 스위치 8종,
+파싱 통과 확인. 예상보다 멀리 갔다.
+
+**남은 벽**: `exit -1` 의 원인을 알 수 없다. 환경변수·라이브러리 경로·
+핸드셰이크 토큰 중 무엇이 문제인지 구분할 단서가 없고,
+하나를 풀어도 다음이 또 나올 가능성이 높다.
+
+**계속했을 때의 비용**
+- .NET 디컴파일러(ILSpy/dnSpy)로 `CheckInput` / `Run` 을 읽어야 한다
+  → 이 PC 에 없고, 설치 및 분석에 상당한 시간이 든다
+- `HandshakeGenerator` 는 Java 측도 난독화돼 있다
+- 성공해도 **비문서화 내부 규약**이라 버전 업 시 깨진다
+- 매뉴얼 4종 어디에도 없으므로 Siemens 지원 대상이 아니다
+
+**권고: 1번(GUI 자동화)으로 전환한다.**
+Bulk Import 는 디렉터리 단위 입력을 받으므로(Module Guide p.283)
+날짜 폴더를 지정하는 클릭 몇 번이면 N 건이 처리된다.
+변환은 Xpedition 이 정상 수행하므로 결과물이 확실하다.
+
+단 `kXRAppMode_Standalone` 의 존재는 기록해 둔다. Siemens 에
+문의한다면 **"3DLT.exe 의 standalone 모드를 배치로 쓸 수 있는가"**
+가 구체적이고 답을 얻기 쉬운 질문이다.

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<export>
+  <object class="110" dynamic="true" noninputfields="true" comments="true">
+    <restrictions>
+      <restriction path="DocumentName" value="User:0404-001650" />
+    </restrictions>
+  </object>
+</export>

@@ -51,6 +51,10 @@ public class EdmProbe {
             System.out.println("[6] 3DModelsDocuments BLOB PROBE (read-only)");
             probeDocumentBlob(omf);
 
+            System.out.println();
+            System.out.println("[7] CLASS NUMBERS (for xml-console class= attribute)");
+            dumpClassNumbers(omf);
+
         } catch (Throwable e) {
             System.out.println();
             System.out.println("[오류] " + e.getClass().getName());
@@ -713,6 +717,12 @@ public class EdmProbe {
                 // OIObjectSet 은 표준 Collection 이다 — iterator() 로 순회한다.
                 // 이 안의 각 행이 Cockpit 의 Attachments 탭 한 줄에 대응한다.
                 if (set instanceof Iterable) {
+                    try {
+                        System.out.println("                size() = "
+                                + set.getClass().getMethod("size").invoke(set));
+                    } catch (Exception ignored) {
+                        // size 없으면 순회 결과로 판단
+                    }
                     int k = 0;
                     for (Object el : (Iterable<?>) set) {
                         k++;
@@ -736,8 +746,6 @@ public class EdmProbe {
                                 if (isBlob && val != null) {
                                     // BLOB 의 실제 크기를 확인한다 (읽기만)
                                     shown = blobInfo(val);
-                                } else if (shown.length() > 90) {
-                                    shown = shown.substring(0, 90) + "...";
                                 }
                                 System.out.println("                    " + (isBlob ? "★BLOB★ " : "        ")
                                         + fn2 + " [" + if2 + "] = " + shown);
@@ -810,6 +818,69 @@ public class EdmProbe {
             Throwable r = (e.getCause() != null) ? e.getCause() : e;
             System.out.println("            DocumentRef failed: " + r.getClass().getSimpleName()
                     + " - " + r.getMessage());
+        }
+    }
+
+    /**
+     * 3D 관련 클래스의 숫자 번호를 찾는다.
+     * xml-console 의 class= 속성과 필드 id 접두사에 쓰인다.
+     * OIClass 에는 번호 접근자가 없으므로 내부 DFClass 를 거친다.
+     */
+    private static void dumpClassNumbers(OIObjectManagerFactory omf) {
+        try {
+            Object cm = omf.getClass().getMethod("getClassManager").invoke(omf);
+            Object arr = cm.getClass().getMethod("getAllClasses").invoke(cm);
+            for (Object c : (Object[]) arr) {
+                String path = String.valueOf(c.getClass().getMethod("getPath").invoke(c));
+                String low = path.toLowerCase();
+                if (!low.contains("model3d") && !low.contains("3dmodel")
+                        && !low.contains("document") && !low.contains("3dpackage")) {
+                    continue;
+                }
+                String num = "?";
+                try {
+                    // OIClass -> 내부 DFClass 에서 번호를 얻는다
+                    Object df = c.getClass().getMethod("getDelegate").invoke(c);
+                    for (String g : new String[] { "getClassNumber", "getNumber", "getClassNo", "getId" }) {
+                        try {
+                            Object v = df.getClass().getMethod(g).invoke(df);
+                            if (v != null) {
+                                num = String.valueOf(v);
+                                break;
+                            }
+                        } catch (NoSuchMethodException ignored) {
+                            // 다음 후보
+                        }
+                    }
+                    if ("?".equals(num)) {
+                        System.out.println("    [" + path + "] DFClass methods:");
+                        for (java.lang.reflect.Method m : df.getClass().getMethods()) {
+                            String mn = m.getName();
+                            if (m.getParameterCount() == 0
+                                    && (mn.toLowerCase().contains("num") || mn.toLowerCase().contains("id"))) {
+                                System.out.println("        " + mn + "() -> " + m.getReturnType().getSimpleName());
+                            }
+                        }
+                        return;
+                    }
+                } catch (Exception e) {
+                    num = "(err " + e.getClass().getSimpleName() + ")";
+                }
+                // ID 필드 이름에서도 접두사를 알 수 있다 (예: 110snr -> 110)
+                String idf = "";
+                try {
+                    Object f = c.getClass().getMethod("getIDField").invoke(c);
+                    if (f != null) {
+                        idf = String.valueOf(f.getClass().getMethod("getName").invoke(f));
+                    }
+                } catch (Exception ignored) {
+                    // 무시
+                }
+                System.out.println("    class=" + num + "   " + path + "   idField=" + idf);
+            }
+        } catch (Throwable t) {
+            Throwable r = (t.getCause() != null) ? t.getCause() : t;
+            System.out.println("    failed: " + r.getClass().getSimpleName() + " - " + r.getMessage());
         }
     }
 
