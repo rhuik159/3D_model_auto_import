@@ -376,3 +376,334 @@ missing 3D Plugin component."*
 
 EDM 로그인 설정은 **서버측 또는 암호화된 저장소**에 보관되는 것으로 보인다.
 실제 동작 확인은 파일 탐색이 아니라 **접속 테스트로 해야 한다** (아래).
+
+---
+
+# 【추가 조사 2026-09-17 15시】 app-auto-login 실증 + Overview 매뉴얼
+
+`edm_lib_overview_gd.pdf` (303p) 조사와 `app-auto-login` 실행 결과다.
+**12항의 "api_conf 확인 실패"는 해결되었다.**
+
+## 13. app-auto-login — 로그인 설정 관리 도구
+
+    C:\MentorGraphics\EEVX.2.14.1\SDD_HOME\common\win64\bin\app-auto-login.exe
+
+Linux 는 `setup-auto-login.sh` (`<SDD_HOME>/idm/login/bin`), 기능 동일 (p.105).
+
+**역할은 설정의 생성/갱신/목록/삭제이며, 인증 도구가 아니다** (p.105, p.107).
+저장된 정보를 소비 측 애플리케이션이 사용해 접속한다 (p.104).
+
+### 구문 (실행 확인)
+
+    app-auto-login -configname <NAME> -user <USER> [-pass <PW> | -passenc <PW>]
+                   -server <URL> -prodlib <LIBS> -license <ROLES>
+                   [-ds] [-dslicense] [-dsprodlib]
+    app-auto-login -list [<NAME>]
+    app-auto-login -delete <NAME>
+    app-auto-login -help
+
+| 옵션 | 의미 |
+|---|---|
+| `-ds` `-dslicense` `-dsprodlib` | 대화상자 억제. **무인 로그인의 정식 조건** (p.96, p.107) |
+| `-passenc` | `<SDD_HOME>\dms\bin\passwdenc.bat` 로 만든 암호문 (p.106) |
+| `-license` | 신규 스킴은 **하나만** 지정 가능 (상호 superset) (p.106) |
+
+신규 역할: `xedmnameduser` `xedmengineer` `xedmlibrarian` `xedmdeveloper`
+구 스킴에는 `xdm3dmanager` 가 있으며 자동 매핑된다 (p.106).
+
+### 자격증명 저장 위치
+
+매뉴얼의 유일한 서술 (p.102):
+
+> "saves information to the **local system only for the system account
+>  you are currently using**"
+
+**구체적 경로는 매뉴얼도 침묵한다.** 12항에서 파일을 찾지 못한 것이 정상이다.
+`%APPDATA%` / `%LOCALAPPDATA%` / `SDD_HOME\dms\config\login` 모두 해당 없음.
+→ **검증은 파일 탐색이 아니라 `app-auto-login -list` 로 해야 한다.**
+
+## 14. api_conf 실증 결과 ★
+
+`app-auto-login -list` 출력:
+
+| ConfigName | User | ProdLib | Licenses | EDM Server |
+|---|---|---|---|---|
+| **api_conf** | admin | [nolimits] | **xedmdeveloper_c** | 10.102.69.191:31000 |
+| library_export | admin | [nolimits] | xedmlibrarian_c | 10.252.173.212:31000 |
+| mb-export | admin | [nolimits] | xedmlibrarian_c | 10.102.69.191:31000 |
+| update_cache | admin | [nolimits] | xedmlibrarian_c | localhost:31000 |
+| xml_console | admin | [nolimits] | xedmlibrarian_c | 10.102.69.191:31000 |
+
+**배치 로그인 자체는 성공이 실증되었다.** `~\.DMSBrowser10.2.14.1\setup-auto-login.log`:
+
+    2026.09.17 14:21:23 LoginUtil: Start iS3 batch login process.
+    2026.09.17 14:21:31 IS3LoginUtil: Using URL for connection : http://10.102.69.191:31000
+    2026.09.17 14:21:31 ClientGIOPConnection to 137.202.176.98:32519
+
+### ★ 라이선스 불일치 — 3D 작업 차단 가능성
+
+`api_conf` 만 `xedmdeveloper_c` 이고 나머지는 전부 `xedmlibrarian_c` 다.
+Overview p.28 Table 1 (EDM Library Licenses):
+
+> "**Librarian** / Librarian 200 / **3D Model Manager** — Gives edit rights for
+>  all library object classes, plus the right to edit Request objects and enter
+>  mapping information on a Component object. **Enables you to launch and use
+>  the 3D Model Manager window.**"
+
+**3D Model Manager 는 Librarian 라이선스에 속한다.**
+API 가이드 p.60 (`xdm3dmanager` → `xedmlibrarian_c` 흡수)과도 일치한다.
+
+→ 현재 `api_conf`(developer) 로는 3D 기능 권한이 없을 가능성이 높다.
+   실제로 임포트 시각에 경고가 3회 기록되었다 (dmsBrowser.log):
+
+    14:28:09 / 14:41:48 / 14:45:22
+    com.mentor.dms.m3dl.db.connection.InteractiveConnectionSetup
+      - Failed to connect with current M3DL connection configuration.
+
+**단, 이 로그는 Threshold=WARN 이라 성공 기록은 애초에 남지 않는다.**
+위 3줄만으로 임포트 실패를 단정할 수 없다. Setup Connection 화면을
+여닫는 과정의 경고일 수도 있다. **DB 실사가 필요하다.**
+
+### 권장 조치
+
+기존 설정을 보존하려면 별도 이름으로 생성한다.
+
+    passwdenc.bat                       # 암호문 획득
+    app-auto-login -ds -dslicense -dsprodlib -configname api_conf_lib ^
+      -user admin -passenc <암호문> ^
+      -server 10.102.69.191:31000 -license xedmlibrarian
+
+## 15. 무인 로그인의 정식 소비 경로 (p.96)
+
+    dmsdesktop [-configname <name>] [-appId <id>] [-remote]
+               [-class <n>] [-object <id>] [-mode VIEW|MODIFY] [-retain]
+
+> "To have the login configuration bypass display of a login dialog box and
+>  automatically enter the login information, use the app-auto-login command
+>  ... Include the -ds, -dslicense, and -dsprodlib switches" (p.96)
+
+Windows 실행 파일은 `dmsdesktop.bat` (p.99). JNLP URL 인자 방식도 있다 (p.98).
+
+**중요**: `-dmsloginconfig` 와 `createBatchAuthenticate` 는 Overview 문서
+303페이지에서 **0건**이다. 단 `LibraryCacheClient.bat` 는 실제로
+`-dmsloginconfig` 를 받는다(5항 실증). 문서화되지 않은 것뿐이다.
+
+## 16. Overview 매뉴얼의 3D 관련 기술 — 역시 0건
+
+303페이지 전수 검색 결과.
+
+| 검색어 | 결과 |
+|---|---|
+| `M3DL` `.xdm` `alignment` | **0건** |
+| `STEP`(파일형식) | **0건** (영단어 "step" 12건은 무관) |
+| `3D` | 6건 (p.28 라이선스 2건, p.92 메뉴명 4건) |
+
+p.92 의 메뉴 4개(`Bulk Import` / `Setup Connection` / `Import Mapping File` /
+`3D Models Manager`)는 **"웹 브라우저로 기동 시 비활성화된다"는 맥락으로만**
+등장하며 기능 설명도 CLI 대응도 없다.
+
+다만 비활성화 사유가 시사적이다 — *"applications or executables requiring a
+Siemens EDA software tree"* (p.92).
+→ 9항에서 찾은 `common3D\win64\lib\BulkImportWorker.exe` 를 호출하는
+   구조라는 방증이다. 실행파일명 자체는 어느 문서에도 없다.
+
+**결론**: API 가이드(135p) + Overview 가이드(303p) **양쪽 모두
+3D 자동화 경로를 문서화하지 않는다.** 10항의 결론이 굳어졌다.
+
+## 17. 남은 문서 후보
+
+Overview 가 반복 참조하는 외부 매뉴얼이다.
+
+1. **Xpedition EDM Server and Utilities Guide** — 이름상 유틸리티 CLI
+   레퍼런스일 가능성이 가장 높다. **3D CLI 가 있다면 여기다.**
+2. Xpedition EDM Library Guide for Administrators — `xml-console` 전체 구문
+   (Appendix B), `ascld2dms` 배치 모드
+3. EDA Library Module Guide — `dynprodlib`
+
+Chapter 4 의 일반 서술 (p.276):
+
+> "Most data import and export loader programs have both a graphical user
+>  interface and a command line user interface. ... the loaders are often
+>  called from a cron script"
+
+→ loader 계열은 CLI 배치 호출이 **정식 용법**임을 명시한다.
+   3D import 가 loader 로 분류된다면 CLI 가 존재할 수 있다.
+
+## 18. 검증 도구 — tools/edmprobe
+
+`api_conf` 로 접속해 3D/model 관련 DB 클래스를 조회하는 읽기 전용 프로그램.
+생성/수정/삭제를 하지 않는다. **아직 실행하지 않았다** (라이선스 정리 선행 필요).
+
+    # 컴파일 (JDK 21 로 Java 17 타깃 — EDM 런타임이 17)
+    javac --release 17 -cp "<8개 jar>" -d tools/edmprobe tools/edmprobe/EdmProbe.java
+
+필요 classpath (`ConnectExamples\.classpath` 기준, 경로만 실제 설치본으로 교체):
+
+    SDD_HOME\dms\java\DMSBrowser\plugins\com.mentor.datafusion.dfo.is3.jar
+    SDD_HOME\dms\java\DMSBrowser\plugins\com.mentor.datafusion.dfo.jar
+    SDD_HOME\dms\java\DMSBrowser\plugins\com.mentor.datafusion.dfodeps.jar
+    SDD_HOME\dms\java\DMSBrowser\plugins\com.mentor.datafusion.oi.jar
+    SDD_HOME\dms\java\DMSBrowser\plugins\com.mentor.datafusion.utils.jar
+    SDD_HOME\dms\java\dmsapi.jar
+    SDD_HOME\dms\java\logkit-1.2.2.jar
+    SDD_HOME\dms\java\avalon-framework-4.2.0.jar
+
+**주의**: 샘플 `.classpath` 의 `C:/MGCNoScan/XENTP2510/...` 는 작성자 PC 경로다.
+이 PC 는 `C:\MentorGraphics\EEVX.2.14.1`.
+또 샘플의 IPC 포트는 `4001` 이지만 이 PC 설정은 `4000` 이다
+(`DFConnector.properties`).
+
+## 19. 미해결 — 임포트 반영 여부
+
+2026-09-17 오후 사용자가 Cockpit 에서 수행한 작업:
+- Bulk Import: `dateFolderRoot\2026-09-17` 의 STEP 파일
+- Import Mapping File: 같은 폴더의 `Mapping.xdm` + `Alignment.dat`
+
+배치 폴더 상태 (11:13 기준, 4건):
+
+    0404-001650.stp  0404-001651.stp  2007-007741.stp  2007-008047.stp
+    Mapping.xdm (4건 기재)  Alignment.dat (4건 기재)
+
+**DB 반영 여부는 미확정.** 근거가 엇갈린다.
+
+| 정황 | 해석 |
+|---|---|
+| 매핑/alignment 파일 4건 정상 생성 | 입력은 정상 |
+| M3DL 연결 실패 경고 3회 | 실패 시사 — 단 성공 로그는 남지 않음 |
+| `%TEMP%\bulkimporttmp\` 에 14:47 생성 파일 | 실행은 됨 |
+| 그 파일이 **페이지 0개 빈 PDF** | 프리뷰 생성 실패 시사 |
+
+**확인 방법 (빠른 순)**
+1. Cockpit 에서 `0404-001650` / `2007-007741` 검색 → `3D PDF` 컬럼 확인
+2. 라이선스 정리 후 `tools/edmprobe` 실행
+
+---
+
+# 【결정적 검증 2026-09-17 16시】 api_conf_lib 접속 실증
+
+`api_conf_lib`(Librarian) 생성 후 `tools/edmprobe` 로 실제 접속해 얻은 결과다.
+**14항의 라이선스 우려는 해소되었고, 자동화 가능성이 크게 올라갔다.**
+
+## 20. 사용자 확인: Cockpit 임포트는 성공했다
+
+사용자 확인 (2026-09-17): **임포트한 4개 부품에 3D Model 이 정상적으로 붙었다.**
+
+→ 14항의 `Failed to connect with current M3DL connection configuration` 경고
+  3회는 **임포트 실패를 의미하지 않았다.** Setup Connection 화면을 여닫는
+  과정의 경고로 보인다. 로그 Threshold 가 WARN 이라 성공 기록이 남지 않아
+  생긴 오해였다. **경고 로그만으로 실패를 단정하면 안 된다는 교훈.**
+
+또한 `api_conf`(developer) 상태에서도 GUI 임포트는 동작했다.
+Cockpit 자체가 별도 라이선스로 기동되므로 `api_conf` 의 역할과 무관했던 것이다.
+
+## 21. api_conf_lib 접속 성공 ★
+
+    app-auto-login -list
+    api_conf_lib   admin   [nolimits]   [xedmlibrarian_c]   10.102.69.191:31000
+
+`EdmProbe api_conf_lib` 실행 결과:
+
+    [1] 접속 성공
+        DFO Version: 2.4.1 Build 2024.33.24128628
+        DB 사용자 : xdm-0d7bfecf3c8
+        서버      : 10.102.69.191:31000
+
+**OI API 배치 인증이 완전히 동작한다.** 매뉴얼 p.32-33 의 공식 경로 그대로다.
+
+## 22. ★★ 3D 모델이 공식 OI API 로 보인다 ★★
+
+`OIClassManager.getAllClasses()` → **351개 클래스**. 그중 3D 관련:
+
+    Model3D          3DModel          M3DLModel      UserModel
+    Package3D        3DPackage        M3DLPackage    GeneratedModel
+    SeriesFile3D     3DSeriesFile     M3DLSeriesFile
+    DefaultModelAssignment            3DModelsDocuments
+    M3DLModel/Resistors/Film          M3DLModel/Diodes/Schottky  (계층 존재)
+
+### 클래스 계층 (getPath / getLabel / getSuperclass)
+
+    Model3D                          label="3D Model"   (최상위)
+      └─ Model3D/3DModel             label="TOP"
+           ├─ .../M3DLModel          label="M3DL"
+           └─ .../UserModel          ← 우리가 등록하는 경로
+
+### Model3D 필드 (25개, getFields())
+
+    ModelId            ModelName         Vendor           ModelCatalog
+    PackageRef         PackageType       MountType        ElectricalLabel
+    SeriesFileRef      Subseries         DocumentRef      Preview3DModel
+    3DModelToCompRef   3DModelToCellRef  3DModelToCellRefKey
+    3DModelToCompRefKey                  ModelToComponentRefKey
+    Model3D_Dyn_id     obj_lock  obj_skn  obj_user
+    CreatedBy  CreatedAt  ModifiedBy  ModifiedAt
+
+**매핑 파일 필드와의 대응이 명확하다.**
+
+| Mapping.xdm | Model3D 필드 |
+|---|---|
+| `FPT:` (부품명) | `3DModelToCompRef` / `ModelToComponentRefKey` |
+| `XDP:` (모델명) | `ModelName` |
+| `VND: User` | `Vendor` + `UserModel` 서브클래스 |
+| (3D PDF 컬럼) | `Preview3DModel` |
+
+8-2 에서 역해석한 `Model3D` transfer 객체의 필드
+(name/manufacturer/seriesName/subseriesName/isUser)와도 일치한다.
+
+## 23. 객체 조회 실증
+
+    OIObjectManager.createQuery(String className, boolean lock)  -> OIQuery
+    OIQuery.addColumn(String field)        ← 필수. 없으면
+                                             "No columns have been added to the query"
+    OIQuery.execute()                      -> OICursor (CursorWrapper)
+    OICursor.next()                        -> boolean (전진)
+    OICursor.getObject() / getProxyObject() / getObjectID() / getOIClass()
+
+`Model3D/3DModel/UserModel` 쿼리에 컬럼 4개를 지정하고 실행한 결과
+**행이 30건 이상 반환되었다** (커서가 계속 전진). 즉 **UserModel 클래스에
+실제 데이터가 존재하며 공식 API 로 열거된다.**
+
+다만 커서에서 개별 필드 값을 꺼내는 부분은 미완이다
+(`getProxyObject()` 반환 객체의 접근자 미확인, 값이 null 로 나옴).
+객체 식별까지는 도달했고, 값 추출은 `OIProxyObject` API 를 더 봐야 한다.
+
+## 24. 수정된 최종 결론 ★
+
+| 단계 | 이전 판단 | **수정 후** |
+|---|---|---|
+| 접속·인증 | 공식 가능 | **실증 완료** (api_conf_lib) |
+| 3D 모델 조회 | 불명 | **공식 OI API 로 가능** (Model3D 계층) |
+| 3D 모델 등록 | 비문서화 내부 클래스만 | **OI API 가능성 있음** — 일반 클래스로 노출됨 |
+| 매핑 연결 | 비문서화 | **가능성 있음** — `3DModelToCompRef` 필드 |
+
+**핵심 전환**: 3D 모델은 전용 바이너리 저장소가 아니라 **EDM DB 의 일반
+오브젝트 클래스**다. 매뉴얼 p.7 이 금지하는 것은 "비공개 내부 클래스 사용"인데,
+`Model3D` / `UserModel` 은 `getAllClasses()` 로 열거되는 **정규 클래스**이며
+`createObject` / `set` / `makePermanent` (p.55, p.57) 대상이 될 수 있다.
+
+**단 아직 검증되지 않은 것**
+- 쓰기(등록)가 실제로 허용되는지 — 조회만 확인했다
+- STEP 파일 바이트를 어디에 넣는지 (`DocumentRef`? `Preview3DModel`? BLOB?)
+- Bulk Import 가 수행하는 지오메트리 파싱·변환을 API 가 대신할 수 있는지
+  (`ACGExecutor` 가 별도 실행파일을 호출하는 것으로 보아 **불가능할 가능성**)
+
+→ **현실적 전망**: 매핑 연결(6단계)은 OI API 로 자동화 가능성이 높다.
+   모델 파일 등록(5단계)은 지오메트리 처리가 얽혀 있어 여전히 어렵다.
+
+## 25. 다음 단계
+
+1. `OIProxyObject` 값 추출 완성 → 임포트된 4건이 실제로 보이는지 확인
+2. `3DModelToCompRef` 로 부품↔모델 연결 구조 확인 (읽기)
+3. 쓰기 가능성 타진 — **테스트 DB 또는 샌드박스에서만**
+4. `Xpedition EDM Server and Utilities Guide` 확보 (17항)
+
+## 26. 도구 사용법
+
+    cd tools\edmprobe
+    # 컴파일
+    javac --release 17 -proc:none -cp "<jar 6개>" -d . EdmProbe.java
+    # 실행 (읽기 전용)
+    java -cp "<edmprobe>;<SDD_HOME jar 전체>" ^
+      "-DDMS_DFCONNECTOR_PROPERTY=file:/<SDD_HOME>\dms\java\config\DFConnector.properties" ^
+      EdmProbe api_conf_lib
+
+**주의**: 콘솔 한글은 코드페이지 문제로 깨져 보인다. 출력은 영문 위주로 작성했다.

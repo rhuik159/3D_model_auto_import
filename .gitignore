@@ -2,3 +2,6 @@ config/config.json
 state/
 logs/
 output/
+
+# 컴파일 산출물
+*.class
