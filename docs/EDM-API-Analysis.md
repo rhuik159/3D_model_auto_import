@@ -826,3 +826,263 @@ M04_diode / M20_fixed_resistor 등 Cockpit 좌측 트리와 같은 파티션 구
   → 임포트된 4건을 조회하면 파일이 어디로 복사되는지 드러난다
 - `xml-console` 로 Model3D 객체를 XML import 할 수 있는지
   (Administrators 가이드 Appendix B 필요)
+
+---
+
+# 【xml-console BLOB 조사 2026-09-17 18시】
+
+사용자 가설: *"3D Model 파일 BLOB 은 xml-console 로 넣고, 나머지 객체는
+OI API 로 만들면 되지 않을까?"*
+
+도구를 직접 실행하고 내부 구현을 확인해 검증했다.
+
+## 33. xml-console 실제 사용법 (실행 확인)
+
+실행 진입점 (`xml-console.bat` 마지막 줄):
+
+    java -Dlog4j1.compatibility=true -Xmx1024m ^
+         -Djava.class.path="<CLASS_PATH>" ^
+         com.mentor.dms.xml.importexport.console.Main %*
+
+**`-help` 실행 결과 (축자)**:
+
+    Export: xml-console -configname <login_config> -export -queryfile <query_file>
+                        -outfile <export_file>
+                        [-blobdir <blob_directory>] [-dateformat UTC|LOCAL|LEGACY]
+                        [-pack [-packsize <n>]] [-verbose]
+    Import: xml-console -configname <login_config> -import
+                        -importfile <import_file>
+                        [-blobdir <blob_directory>] [-complete] [-transaction]
+                        [-pack] [-verbose]
+
+| 옵션 | 설명 |
+|---|---|
+| `-configname` | **로그인 설정 이름** → `api_conf_lib` 를 그대로 쓸 수 있다 |
+| **`-blobdir`** | **"directory for save and restore BLOBs"** ★ |
+| `-transaction` | 트랜잭션 모드 (import) |
+| `-complete` | 타임스탬프 특성까지 모두 import |
+| `-pack` / `-packsize` | 대용량 분할 (기본 5000 객체/파일) |
+
+**→ BLOB 입출력 기능은 실재한다. 사용자 가설의 전제는 맞다.**
+
+주의: 이 PC 에서 `xml-console.bat` 은 PATH 문제로 직접 실행이 안 됐다.
+`Main` 클래스를 직접 호출하면 동작한다. `.bat` 은 EBS 환경에서 실행해야 한다.
+
+## 34. XML 스키마 — BLOB 표현 방식
+
+`com.mentor.dms.xml.engine.XMLTags` 에서 추출한 **전체 태그 목록**:
+
+    export  data  object  field  catalog  class  objectid  id  value
+    restrictions  restriction  ignore  sort  sorting  ascending
+    blobs   path   graphic   version  unit  date  format  list
+    dynamic  comments  emptyfields  noninputfields  defaultvalues
+    multirefclass  broken_ref  numwithnull  canonicaloutput
+    command  modify  delete  clear  only  null  true  false
+
+**BLOB 관련 태그는 `blobs`, `path`, `graphic` 이다.**
+
+`XmlImport` / `XmlExport` 내부 심볼:
+
+    DFBlobField   DFBlob   getBlob   putToBlob   exportBlob
+    blobPath   blobOutputDir   mBlobImportPath   hkp_blob
+    BlobEncryptDecrypt        ← BLOB 암호화 계층 존재
+    Graphic / graphicBlob / setGraphicXML / loadGraphicXML
+    "Cannot decrypt graphics BLOB from object "
+    " has to be directory for BLOB files"
+
+→ BLOB 본체는 XML 안에 base64 로 인라인되지 않는다.
+   **`-blobdir` 디렉토리에 별도 파일로 두고 XML 은 `path` 로 참조**하는 방식이다.
+
+기존 데이터 예제(`XMLDataExample.xml`)의 필드 표기는 숫자 코드 기반이다.
+
+    <object objectid="PN-1234" class="001" catalog="AA">
+      <field id="001obj_id">PN-1234</field>
+
+## 35. ★ 가설의 결정적 문제 ★
+
+`XmlImport` 는 BLOB 을 쓸 때 **`DFBlobField` 를 통해서만** 접근한다
+(`getBlob` → `putToBlob`). 즉 **대상 클래스에 BLOB 필드가 정의돼 있어야 한다.**
+
+그런데 29항에서 전수 확인한 결과:
+
+    Model3D                    → OIBlobField 0개
+    Model3D/3DModel/UserModel  → OIBlobField 0개
+    Document                   → OIBlobField 0개 (Path 문자열만)
+
+    BLOB 보유 클래스: Picture(PictureBlob) / VariantBOM(VariantBlob)
+                     Mapping+SMC/*(HkpBlob) / DXSymbol(HkpBlob,OleBlob)
+
+**→ `Model3D` 에는 BLOB 을 넣을 슬롯 자체가 없다.**
+   `-blobdir` 이 있어도 넣을 곳이 없으면 의미가 없다.
+
+`hkp_blob` 심볼이 보이는 것도 정합한다 — xml-console 의 BLOB 처리는
+`Mapping` / `DXSymbol` 계열의 `HkpBlob` 을 위한 것이다.
+
+### 결론: 가설은 현재 스키마에서 성립하지 않는다
+
+| 가설 구성요소 | 판정 |
+|---|---|
+| xml-console 로 BLOB 주입 가능? | **예** — `-blobdir` 실재 |
+| 그 대상이 3D 모델 파일이 될 수 있나? | **아니오** — Model3D 에 BLOB 필드 없음 |
+| OI API 로 나머지 객체 생성 가능? | **아마도** — createObject 등 존재(28항) |
+| **조합해서 5단계 자동화?** | **불가** — 파일 본체를 넣을 자리가 없다 |
+
+## 36. 그렇다면 STEP 파일은 어디에 저장되는가
+
+`Document` 클래스가 `Path`(문자열) + `FileInformation`(Set) +
+`CheckOutStatus`(int) 를 갖는 구조로 보아,
+**파일 본체는 DB BLOB 이 아니라 파일시스템에 두고 경로로 참조**된다.
+
+이는 Setup Connection 의 M3DL Root (`\10.102.69.191\sdd_home\M3DL`,
+7항)와도 부합한다. 3D 모델 파일은 그 공유 경로에 물리적으로 놓이고
+DB 는 메타데이터와 경로만 관리하는 구조로 추정된다.
+
+**→ 검증 방법**: 임포트된 4건의 `Document.Path` 를 조회하면
+   파일이 실제로 어디로 복사되는지 확정할 수 있다. (다음 단계 후보)
+
+이것이 사실이라면 5단계 자동화의 그림이 달라진다.
+BLOB 주입이 아니라 **① 파일을 정해진 경로에 복사 + ② DB 메타데이터 생성**
+이 되며, ②는 OI API 로 가능할 수 있다.
+다만 지오메트리 변환·프리뷰 생성(`ACGExecutor`)은 여전히 별개 문제다.
+
+## 37. Administrators 가이드 확인 결과 (edm_lib_admin_gd.pdf, 434p)
+
+Appendix B "XML Console" = **p.407~434**. 도구 실행 결과(33~35항)와 일치하며,
+**실행만으로는 알 수 없었던 두 가지**가 추가로 확인됐다.
+
+### 37-1. ★ Mapping 클래스는 xml-console 사용이 금지다 ★
+
+p.407 (p.424 반복), 축자:
+
+> "**Do not use the xml-console command to create or modify EDA library objects
+>  in the following object classes: Mapping (10), Interface (70), Symbol (71),
+>  Package (3), Cell (130), Padstack (120), Pad (122), and Hole (123).
+>  Do not use xml-console to load EDA library object BLOBs.**
+>  As an alternate to xml-console, use **EDX Export and EDX Import**."
+
+35항에서 "BLOB 보유 클래스는 Picture / VariantBOM / Mapping / DXSymbol" 이라 했는데,
+그중 **`Mapping`(class 10)은 명시적 금지**이고 `DXSymbol` 도 Symbol(71) 계열이라
+사실상 금지다. → **매핑 파일을 xml-console 로 밀어넣는 것은 매뉴얼 위반이다.**
+대안은 **EDX Import** 이나 CLI 문법은 이 매뉴얼에 없다.
+
+### 37-2. BLOB 특성의 데이터 모델 요건 (p.119-120)
+
+BLOB 임포트가 동작하려면 대상 클래스에 **type 9 (BLOB)** 특성이 있어야 하고,
+다음 이름 규칙의 짝이 필요하다.
+
+    <blob_char_name>      메인 BLOB 특성 (type 9, value type 6)
+    <blob_char_name>_p    파일 경로 특성 (필수)
+    <blob_char_name>_s    상태 (선택, 0=checked out / 1=checked in)
+    <blob_char_name>_d    날짜 (선택)
+    <blob_char_name>_u    사용자 (선택)
+
+BLOB 최대 크기 4GB (p.119).
+
+→ **`Model3D` 에는 이 특성 쌍이 없다**(29항 실측과 일치). 매뉴얼 근거로도
+   `-blobdir` 로 STEP 파일을 `Model3D` 에 직접 넣을 수단은 존재하지 않는다.
+
+### 37-3. 인증은 `-configname` 이다 (p.408)
+
+`-dmsloginconfig` 는 **`ascld2dms` 전용**(p.402)이다. 도구마다 다르니 주의.
+`LibraryCacheClient` 도 `-dmsloginconfig` 를 쓴다(5항).
+
+    xml-console  -configname api_conf_lib   ← 우리 설정 그대로 사용 가능
+
+## 38. ★ 문서화된 우회로 — Document(110) 경유 ★
+
+p.427-430 "Bulk Loading Documents With xml-console" 에 **완전한 절차와 예제**가 있다.
+`Document` 클래스는 금지 목록에 없고 BLOB 로드가 **명시적으로 지원**된다.
+
+    <?xml version="1.0" encoding="UTF-8"?>
+    <data>
+      <object objectid="" class="110" broken_ref="true">
+          <field id="110snr">datasheet_example1.pdf</field>       <!-- Document Name -->
+          <field id="110obj_skn">NNDM</field>                     <!-- Catalog Group Key -->
+          <field id="110dokname">XMLIO_datasheet_example1.pdf</field>
+          <list id="110doc_lst" clear="true">
+               <field id="110doc_idx">0</field>                   <!-- Index=0 -->
+               <field id="110filetype">pdf</field>
+               <field id="110d_blob_p">C:\edm_documents\datasheet_example1.pdf</field>
+               <field id="110d_blob">datasheet_example1.pdf</field>
+            </list>
+      </object>
+    </data>
+
+- `110d_blob`   = 파일명(leaf name) — 실제 BLOB 특성
+- `110d_blob_p` = 소스 전체 경로
+- objectid 는 `<110snr 값>:1:1` 형태(버전 포함) 또는 `""` 로 두면 자동 결정 (p.427)
+- 같은 객체에 **두 번째 파일**을 붙일 때는 `clear="true"` 를 **빼야 한다** (p.428)
+- 100건 이상이면 `-transaction` 권장 (p.428)
+
+### 가능성 있는 3단계 경로 (★ 미검증 추론)
+
+p.431 의 문장이 실마리다.
+
+> "you can create a document reference from **any class that has a Documents tab**
+>  (for example, the Manufacturer Part, Variant BOM, or Audit class)"
+
+`Model3D` 에는 `DocumentRef` (REFERENCE) 필드가 있다(22항 실측).
+
+    ① xml-console -blobdir  →  STEP 파일을 Document(110) 첨부로 벌크 로드
+    ② OI API createObject   →  Model3D 객체 생성
+    ③ DocumentRef 연결      →  ①의 Document 를 가리키게
+
+**단 매뉴얼은 `Model3D` 를 예시로 들지 않는다. 검증이 필요한 추론이다.**
+
+**그리고 이 경로가 되더라도 지오메트리 문제는 남는다.**
+Document 에 STEP 파일이 첨부되고 Model3D 레코드가 생겨도
+`ACGExecutor` 가 하던 변환·프리뷰 생성은 일어나지 않는다.
+Cockpit 에서 3D 형상이 정상으로 보일지는 별개 문제다.
+
+## 39. xml-console 의 조용한 실패 모드 (운영 시 필수 숙지)
+
+| 상황 | 결과 | 페이지 |
+|---|---|---|
+| `-blobdir` 에 파일이 없음 | **에러 없이 첨부 없이 객체만 임포트** | p.410 |
+| `broken_ref` 생략 (기본 false) | 참조 깨진 객체가 **조용히 미로드** | p.423 |
+| non-input 특성 | 익스포트돼도 **재임포트 불가** | p.413 |
+| `defaultvalues` (take-over) 특성 | 임포트 시 무시 | p.416 |
+| `<only>` 를 `<restrictions>` 앞에 배치 | 파싱 에러로 실패 | p.418 |
+| `<list clear>` 누락 (첫 요소) | 항목 중복 시 임포트 에러 | p.422 |
+
+임포트에는 **edit rights 필수**이며 Librarian 또는 Developer 라이선스가 필요하다
+(p.407, p.9). `api_conf_lib`(Librarian) 가 적합하다.
+
+임포트 XML 은 **UTF-8 / version="1.0" 만 허용**된다 (p.422).
+BOM 요구사항은 매뉴얼이 언급하지 않는다 ([[powershell-51-korean-bom]] 관련 주의).
+
+## 40. 3D 관련 — 이 매뉴얼도 침묵 (3번째 문서)
+
+434페이지 전수 검색.
+
+| 검색어 | 결과 |
+|---|---|
+| `Model3D` `M3DL` `UserModel` `STEP` `.stp` `.xdm` | **전부 0건** |
+| `3D` | 3건뿐. 모두 임포트와 무관 |
+| `alignment` | 다수 있으나 **전부 UI 레이아웃 정렬**. 3D 얼라인먼트 아님 |
+| `bulk` | "Bulk Loading Documents" / "bulk modification" 뿐 |
+
+**유일한 3D 실마리 (p.30)**:
+
+> ".NET Framework — To create a new 3D model on any Windows 8 and later client
+>  system, the system must have the .NET framework from Microsoft"
+>
+> Related Topics: *"Creating a New 3D Model Using a Template
+>  [**Xpedition EDM Library EDA Library Module Guide**]"*
+
+→ **3D 모델 생성의 공식 문서는 《EDA Library Module Guide》 에 있다.**
+   지금까지 확인한 3개 문서(API 135p / Overview 303p / Admin 434p)가
+   모두 3D 에 침묵했으나, 이 문서는 상호참조로 직접 지목된다.
+   **다음 확보 우선순위 1위.**
+
+## 41. 기타 도구 (Admin 가이드 기준)
+
+| 도구 | 용도 | 파일 로드 | 페이지 |
+|---|---|---|---|
+| `xml-console` | XML ↔ DB, `-blobdir` 로 첨부 동반 | **예 (BLOB)** | p.408-414 |
+| `ascld2dms` | ASCII 로더. `-batch` 지원, **임포트 전용** | 아니오 (텍스트만) | p.377-406 |
+| `batchadmin` | 스키마·인덱스 관리. **서버에서만 실행** | 아니오 | p.362-368 |
+| `data_model_checker` / `domain_model_checker` | 모델 정합성 검사 | 아니오 | p.369-376 |
+| **EDX Import / Export** | **EDA 라이브러리 객체의 공식 경로** (Mapping 포함) | 예 | p.407, p.424 (CLI 문법 없음) |
+
+`dbomloader` 는 이 매뉴얼에 없다 (검색 0건).
