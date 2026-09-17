@@ -186,7 +186,7 @@ public class EdmProbe {
      * OIObjectManager 의 조회 메서드 시그니처를 먼저 덤프한 뒤, 가능한 것을 시도한다.
      */
     private static void dumpUserModels(OIObjectManagerFactory omf) {
-        for (String cls : new String[] { "Model3D/3DModel/UserModel", "Model3D" }) {
+        for (String cls : new String[] { "Model3D/3DModel/UserModel" }) {
             try {
                 Object om = omf.createObjectManager();
                 // createQuery(String className, boolean lock) — lock=false 로 읽기 전용
@@ -194,9 +194,35 @@ public class EdmProbe {
                         .invoke(om, cls, false);
                 System.out.println("    [" + cls + "] query created: " + q.getClass().getSimpleName());
 
+                // ★ ID 필드를 반드시 먼저 넣어야 한다.
+                //   빠뜨리면 커서가 "dfObjectID is null" 상태가 되어
+                //   getObject()/getObjectID() 가 전부 null 을 반환한다.
+                String idField = null;
+                try {
+                    Object cmx = omf.getClass().getMethod("getClassManager").invoke(omf);
+                    Object arr0 = cmx.getClass().getMethod("getAllClasses").invoke(cmx);
+                    for (Object c0 : (Object[]) arr0) {
+                        if (cls.equals(String.valueOf(c0.getClass().getMethod("getPath").invoke(c0)))) {
+                            Object idf = c0.getClass().getMethod("getIDField").invoke(c0);
+                            if (idf != null) {
+                                idField = String.valueOf(idf.getClass().getMethod("getName").invoke(idf));
+                            }
+                            break;
+                        }
+                    }
+                } catch (Exception ignored) {
+                    // ID 필드를 못 찾아도 아래에서 계속 시도한다
+                }
+                System.out.println("        ID field: " + idField);
+
                 // "No columns have been added to the query" 방지 — 조회할 필드를 먼저 지정한다.
                 java.util.List<String> added = new java.util.ArrayList<>();
-                for (String col : new String[] { "ModelName", "Vendor", "ModelCatalog", "PackageType" }) {
+                java.util.List<String> cols = new java.util.ArrayList<>();
+                if (idField != null) {
+                    cols.add(idField);
+                }
+                cols.addAll(java.util.Arrays.asList(FIELDS_OF_INTEREST));
+                for (String col : cols) {
                     for (String adder : new String[] { "addColumn", "addField", "addSelect" }) {
                         try {
                             q.getClass().getMethod(adder, String.class).invoke(q, col);
@@ -444,22 +470,43 @@ public class EdmProbe {
                     id = "(id?)";
                 }
                 String detail = "";
-                // ProxyObject 가 조회 컬럼 값을 들고 있다
-                if (getProxy != null) {
-                    try {
-                        detail = row(getProxy.invoke(cur));
-                    } catch (Exception ignored) {
-                        detail = "";
+                // 실제 OIObject 에서 값을 읽는다 (ProxyObject 는 조회 컬럼만 들고 있을 수 있다)
+                try {
+                    Object full = getObj.invoke(cur);
+                    dumpAccessorsOnce(full);
+                    detail = row(full);
+                } catch (Exception e) {
+                    Throwable r = (e.getCause() != null) ? e.getCause() : e;
+                    if (n == 1) {
+                        System.out.println("        [diag] getObject() failed: "
+                                + r.getClass().getSimpleName() + " - " + r.getMessage());
                     }
                 }
-                if (detail.isEmpty()) {
+                if ((detail.isEmpty() || detail.startsWith("(no values")) && getProxy != null) {
                     try {
-                        detail = row(getObj.invoke(cur));
-                    } catch (Exception ignored) {
-                        detail = "";
+                        Object px = getProxy.invoke(cur);
+                        dumpAccessorsOnce(px);
+                        detail = row(px);
+                    } catch (Exception e) {
+                        Throwable r = (e.getCause() != null) ? e.getCause() : e;
+                        if (n == 1) {
+                            System.out.println("        [diag] getProxyObject() failed: "
+                                    + r.getClass().getSimpleName() + " - " + r.getMessage());
+                        }
                     }
                 }
                 System.out.println("        " + n + ". id=" + id + "   " + detail);
+
+                // 임포트한 부품이면 DocumentRef 를 따라가 STEP 파일 저장 위치를 확인한다
+                try {
+                    Object full = getObj.invoke(cur);
+                    Object name = fieldValue(full, "ModelName");
+                    if (name != null && String.valueOf(name).startsWith("0404-0016")) {
+                        dumpDocument(full);
+                    }
+                } catch (Exception ignored) {
+                    // 진단용이므로 실패해도 계속
+                }
             }
             System.out.println("        total listed: " + n + (n == 20 ? " (truncated)" : ""));
         } catch (Throwable t) {
@@ -469,30 +516,166 @@ public class EdmProbe {
         }
     }
 
-    /** 객체 한 건에서 관심 필드를 뽑는다. */
+    /**
+     * 객체 한 건에서 관심 필드를 뽑는다.
+     * OIObject 의 값 접근자 이름이 버전마다 달라 여러 후보를 시도한다.
+     */
     private static String row(Object o) {
         if (o == null) {
             return "(null)";
         }
         StringBuilder sb = new StringBuilder();
-        for (String f : new String[] { "ModelName", "Vendor", "ModelCatalog", "PackageType" }) {
-            try {
-                Object v = o.getClass().getMethod("get", String.class).invoke(o, f);
-                if (v != null && !String.valueOf(v).isEmpty()) {
-                    sb.append(f).append('=').append(v).append("  ");
-                }
-            } catch (Exception ignored) {
-                // 필드 없음
+        for (String f : FIELDS_OF_INTEREST) {
+            Object v = fieldValue(o, f);
+            if (v != null && !String.valueOf(v).isEmpty() && !"null".equals(String.valueOf(v))) {
+                sb.append(f).append('=').append(v).append("  ");
             }
         }
         if (sb.length() == 0) {
-            try {
-                sb.append(o.getClass().getMethod("getID").invoke(o));
-            } catch (Exception ignored) {
-                sb.append(o);
-            }
+            sb.append("(no values; type=").append(o.getClass().getSimpleName()).append(')');
         }
         return sb.toString();
+    }
+
+    private static final String[] FIELDS_OF_INTEREST = {
+        "ModelName", "Vendor", "ModelCatalog", "Subseries", "PackageType",
+        "DocumentRef", "3DModelToCompRef", "3DModelToCompRefKey", "ModelToComponentRefKey"
+    };
+
+    /** 한 필드 값을 여러 접근자 후보로 시도해 읽는다. */
+    private static Object fieldValue(Object o, String field) {
+        for (String getter : new String[] { "get", "getValue", "getString", "getFieldValue" }) {
+            try {
+                return o.getClass().getMethod(getter, String.class).invoke(o, field);
+            } catch (NoSuchMethodException ignored) {
+                // 다음 후보
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Model3D 의 DocumentRef 를 따라가 STEP 파일이 어디 저장되는지 확인한다.
+     * 이것이 5단계 자동화 설계의 핵심 질문이다.
+     */
+    private static void dumpDocument(Object model) {
+        try {
+            Object doc = model.getClass().getMethod("getObject", String.class)
+                    .invoke(model, "DocumentRef");
+            if (doc == null) {
+                System.out.println("            DocumentRef -> null");
+                return;
+            }
+            System.out.println("            DocumentRef -> " + doc.getClass().getSimpleName());
+            try {
+                Object oc = doc.getClass().getMethod("getOIClass").invoke(doc);
+                System.out.println("              class = " + describe(oc)
+                        + "  path=" + oc.getClass().getMethod("getPath").invoke(oc));
+            } catch (Exception ignored) {
+                // 클래스 정보 없으면 값만 본다
+            }
+            for (String f : new String[] { "Path", "DocumentName", "DocumentKey", "TitleOfDocument",
+                    "CheckOutStatus", "MajorVersion", "MinorVersion", "Status" }) {
+                Object v = fieldValue(doc, f);
+                if (v != null && !String.valueOf(v).isEmpty()) {
+                    System.out.println("              " + f + " = " + v);
+                }
+            }
+            // ★ FileInformation Set 안에 실제 파일 정보가 있다 — STEP 저장 위치의 답
+            try {
+                Object set = doc.getClass().getMethod("getSet", String.class).invoke(doc, "FileInformation");
+                if (set == null) {
+                    System.out.println("              FileInformation -> null");
+                    return;
+                }
+                java.lang.reflect.Method sNext = null;
+                for (String cand : new String[] { "next", "hasNext" }) {
+                    try {
+                        sNext = set.getClass().getMethod(cand);
+                        break;
+                    } catch (NoSuchMethodException ignored) {
+                        // 다음 후보
+                    }
+                }
+                System.out.println("              FileInformation (" + set.getClass().getSimpleName() + "):");
+                if (sNext != null && sNext.getName().equals("next")) {
+                    int k = 0;
+                    java.lang.reflect.Method getEl = null;
+                    for (String cand : new String[] { "getObject", "get", "getElement" }) {
+                        try {
+                            getEl = set.getClass().getMethod(cand);
+                            break;
+                        } catch (NoSuchMethodException ignored) {
+                            // 다음 후보
+                        }
+                    }
+                    while (k < 5 && Boolean.TRUE.equals(sNext.invoke(set))) {
+                        k++;
+                        Object el = (getEl != null) ? getEl.invoke(set) : set;
+                        StringBuilder sb = new StringBuilder("                [" + k + "] ");
+                        for (String ff : new String[] { "FilePath", "Path", "FileName", "FileType",
+                                "Index", "BlobPath", "d_blob", "d_blob_p" }) {
+                            Object vv = fieldValue(el, ff);
+                            if (vv != null && !String.valueOf(vv).isEmpty()) {
+                                sb.append(ff).append('=').append(vv).append("  ");
+                            }
+                        }
+                        if (sb.toString().trim().endsWith("]")) {
+                            sb.append("(fields: ");
+                            try {
+                                Object oc2 = el.getClass().getMethod("getOIClass").invoke(el);
+                                Object fl = oc2.getClass().getMethod("getFields").invoke(oc2);
+                                for (Object ff2 : (Collection<?>) fl) {
+                                    sb.append(ff2.getClass().getMethod("getName").invoke(ff2)).append(' ');
+                                }
+                            } catch (Exception ignored) {
+                                sb.append('?');
+                            }
+                            sb.append(')');
+                        }
+                        System.out.println(sb);
+                    }
+                    if (k == 0) {
+                        System.out.println("                (empty set)");
+                    }
+                } else {
+                    System.out.println("                (no next(); methods: "
+                            + set.getClass().getMethods().length + ")");
+                }
+            } catch (Exception e) {
+                Throwable r = (e.getCause() != null) ? e.getCause() : e;
+                System.out.println("              FileInformation failed: "
+                        + r.getClass().getSimpleName() + " - " + r.getMessage());
+            }
+        } catch (Exception e) {
+            Throwable r = (e.getCause() != null) ? e.getCause() : e;
+            System.out.println("            DocumentRef failed: " + r.getClass().getSimpleName()
+                    + " - " + r.getMessage());
+        }
+    }
+
+    /** 객체가 가진 값 접근자를 한 번만 덤프한다 (진단용). */
+    private static boolean accessorsDumped = false;
+
+    private static void dumpAccessorsOnce(Object o) {
+        if (accessorsDumped || o == null) {
+            return;
+        }
+        accessorsDumped = true;
+        System.out.println("        [diag] value accessors on " + o.getClass().getName() + ":");
+        for (java.lang.reflect.Method m : o.getClass().getMethods()) {
+            String n = m.getName();
+            if ((n.startsWith("get") || n.equals("value") || n.startsWith("read"))
+                    && m.getParameterCount() <= 1) {
+                StringBuilder ps = new StringBuilder();
+                for (Class<?> p : m.getParameterTypes()) {
+                    ps.append(p.getSimpleName());
+                }
+                System.out.println("            " + n + "(" + ps + ") -> " + m.getReturnType().getSimpleName());
+            }
+        }
     }
 
     /** OIClass 에서 번호와 이름을 뽑는다. 메서드 이름이 버전마다 달라 리플렉션으로 시도한다. */

@@ -1086,3 +1086,205 @@ BOM 요구사항은 매뉴얼이 언급하지 않는다 ([[powershell-51-korean-
 | **EDX Import / Export** | **EDA 라이브러리 객체의 공식 경로** (Mapping 포함) | 예 | p.407, p.424 (CLI 문법 없음) |
 
 `dbomloader` 는 이 매뉴얼에 없다 (검색 0건).
+
+---
+
+# 【A: DB 실사 + B: Module Guide 2026-09-17 19시】
+
+## 42. ★ 임포트된 4건을 DB 에서 확인했다 ★
+
+`api_conf_lib` 로 `Model3D/3DModel/UserModel` 을 조회한 결과다.
+
+    ModelName=0404-001650  Vendor=User  ModelCatalog=User  Subseries=0404-001650
+    ModelName=0404-001651  Vendor=User  ModelCatalog=User  Subseries=0404-001651
+    ModelName=2007-007741  Vendor=User  ModelCatalog=User  Subseries=2007-007741
+    ModelName=2007-008047  Vendor=User  ModelCatalog=User  Subseries=2007-008047
+    (그 외 기존 모델 7건: wjTest / 0402C / 1206R / 0402R / 063R_temp x3)
+
+**Cockpit Bulk Import 결과가 OI API 로 완전히 조회된다.**
+`Vendor=User`, `ModelCatalog=User` 는 매핑 파일의 `VND: User` 와 대응하며
+Module Guide p.251 의 "custom 3D user model" = User 카탈로그 서술과 일치한다.
+
+### 쿼리 작성 시 함정 (실증)
+
+`createQuery` 에 **ID 필드를 컬럼으로 넣지 않으면** 커서가
+`dfObjectID is null` 상태가 되어 `getObject()` / `getObjectID()` 가
+전부 null 을 반환한다. 행 수는 정상인데 값만 비는 형태라 원인 파악이 어렵다.
+
+    OIClass.getIDField().getName()  →  "ModelId"     ← 이걸 먼저 addColumn
+    이후 ObjectWrapper.get(String) / getString(String) 으로 값 접근
+
+## 43. ★★ STEP 파일 저장 구조 규명 ★★
+
+`Model3D.DocumentRef` 를 따라간 결과:
+
+    Model3D/3DModel/UserModel  "0404-001650"
+      └─ DocumentRef ─► Document/RootDocument/3DModelsDocuments
+                          DocumentName    = User:0404-001650
+                          DocumentKey     = User:0404-001650:1:1   ← 버전 포함 키
+                          TitleOfDocument = User:0404-001650
+                          CheckOutStatus  = 0
+                          MajorVersion=01  MinorVersion=1
+                          FileInformation = ObjectSetWrapper (비어있지 않음)
+
+**`3DModelsDocuments` 는 `Document` 의 하위 클래스다.**
+38항에서 "가능성 있는 우회로"로 추론했던 Document 경유가
+**실제 구조임이 확인되었다.** STEP 파일은 Document 첨부로 관리된다.
+
+`DocumentKey` 형식 `User:<모델명>:1:1` 은 Admin 가이드 p.427 의
+`<110snr>:1:1` 규칙과 정확히 같다. 즉 **xml-console 의 Document 벌크 로드
+규격(p.427-430)이 그대로 적용될 수 있는 형태다.**
+
+Module Guide 도 이를 뒷받침한다 (p.254):
+
+> "**3D Model button** -- Displays the content of the **.STEP model**...
+>  **Save button** -- Enables you save the .STEP model to a new name."
+> (둘 다 User 카탈로그 모델에서만 활성)
+
+그리고 p.57-58 의 production library `Export 3D Model` 특성:
+
+> "Y: Yes (include native format) — ... include any **stored native source files**
+>  of custom models in the export"
+
+→ **원본 .stp 가 EDM 안에 보관된다**는 것이 문서로도 확인된다.
+
+미완: `FileInformation` Set 순회는 `ObjectSetWrapper` 의 API 가 달라
+(`next()` 없음) 파일 경로 실값까지는 못 읽었다. 구조 파악에는 지장 없다.
+
+## 44. Module Guide (edm_lib_module_gd.pdf) — 결정적 획득물
+
+3D Model Management 챕터 = **p.264~292**.
+
+### 44-1. ★ Mapping.xdm 완전 규격 (p.286-292) ★
+
+**두 가지 포맷이 있으며 우리는 thin format 을 쓰고 있다.**
+
+**Thin format**
+
+    FPT: <Component Part Number>
+    XDP: <Model Name>
+    ALT_CELL: <Alternate Cell Name>   (선택)
+    VND: <Vendor name>                (선택)
+
+**Extended format**
+
+    FPT: <Component Part Number>
+    FPH: <Factory Path>
+    ALT_CELL: <Alternate Cell Name>   (선택)
+    XDP: <Model Name> <Series Name> <Default T/F> <UserModel T/F> <Obsolete T/F>
+    XDP1: Imported/Imported.edp        ← 리터럴 고정
+    XDP2: <path to .edp>
+
+**포맷 판별 (p.286)**: `FPT:` 다음에 `FPH:` 가 있으면 extended 로 해석하며
+XDP/XDP1/XDP2 가 없으면 **에러**. `VND:` 는 thin 전용이며
+**extended 에 넣으면 임포트가 실패할 수 있다** (p.288).
+
+**커스텀(User) 모델 규칙 (p.287-288)**
+- `XDP:` 모델명에 **확장자를 넣지 않는다**
+- `<Series Name>` 은 더미값 (모델명 반복 가능)
+- `<UserModel Flag>` = **T**, `<Obsolete>` = F (값은 무시되나 관례상 F)
+- `VND: User` — "When loading custom models the value **must be `User`**"
+- `FPH: Imported` — 값은 무시되지만 라인은 필요.
+  **커스텀 모델은 전부 같은 디렉터리에 있어야 한다** (p.287)
+
+→ **현재 우리 출력(`FPT:`/`XDP:`/`VND: User`/`ALT:`)은 thin format 이며
+   규격에 부합한다.** 다만 우리는 `ALT:` 를 쓰는데 매뉴얼의 키워드는
+   **`ALT_CELL:`** 이다 (p.287). 빈 값이라 무시됐을 가능성이 높으나
+   **키워드 불일치이므로 확인이 필요하다.**
+
+3-4 항에서 "정품 XDMapping.xdm 과 형식이 다르다"고 했던 의문이 해소된다.
+번들 파일은 extended format 이고 우리 출력은 thin format 이다. **둘 다 정상이다.**
+
+### 44-2. Alignment.dat 규격 (p.283)
+
+    "<comp_part_no>" "<mfg_part_no>" <vendor> <Trans_X> <Trans_Y> <Trans_Z>
+      <Rot_X> <Rot_Y> <Rot_Z> <A|M> "<ALT_CELL>"
+
+우리 출력: `"0404-001650" "0404-001650" User  0 0 0 0 0 0 M` — **규격에 부합**한다.
+
+**매뉴얼 미기재**: `<A|M>` 의 정확한 의미, 좌표 단위(mm/mil), 각도 단위.
+p.284 Figure 164 에 실제 예시가 있으나 **이미지라 텍스트 추출 불가**.
+
+### 44-3. Bulk Import 사양 (p.282-283)
+
+- 지원 포맷: **STEP, SAT, IGES**, Siemens 암호화 **XTD** (p.282)
+- **Windows 전용** (p.283)
+- 입력: **디렉터리 또는 개별 파일** (p.283) — 우리 날짜 폴더를 그대로 지정 가능
+- 결과: `Library > 3D Model > User` 카탈로그에 적재 (p.283)
+- **할당 없이 모델만 적재 가능** (p.251) ← 5단계와 6단계를 분리 설계할 근거
+
+### 44-4. Import Mapping File 의 중요 제약 (p.284)
+
+> "Import Mapping File only imports 3D models for components that are in the
+>  **production library specified by the production library setting in
+>  EDM Library Cockpit**."
+
+→ 대상 부품이 현재 production library 에 없으면 **조용히 누락**된다.
+   자동화 시 이 설정을 반드시 선행 확인해야 한다.
+
+### 44-5. CLI/배치 — 이 문서도 침묵 (4번째 문서)
+
+3D 챕터(p.264-292) 전 구간에서 `command` `batch` `script` `.exe` `CLI` `API`
+실질 히트 **0건**. 문서 전체에서 `3DLT` `XD3DFileInterop` `BulkImportWorker`
+`xml-console` **0건**. `ACG` 는 p.260 에 용어로 1회만 등장한다.
+
+이 문서에 있는 CLI 는 3D 와 무관한 `CapitalLibraryImporter`(p.304)와
+`update_cache_wg`(p.324)뿐이며, 후자에 3D 스위치는 없다.
+3D export 여부는 CLI 가 아니라 **Production Library 의 `Export 3D Model`
+특성(S/Y/N, p.57)** 으로만 제어된다.
+
+**Admin 가이드 p.30 이 가리킨 "Creating a New 3D Model Using a Template"
+(p.279-281)은 STEP 임포트와 무관하다.** M3DL 파라메트릭 템플릿으로
+치수를 넣어 모델을 생성하는 기능이며 GUI 전용이다. 상호참조가
+우리 목표 기준으로는 잘못된 방향을 가리켰다.
+
+## 45. 최종 결론 — 4개 문서 + 실측 종합
+
+| 단계 | 공식 CLI/API | 현실적 자동화 |
+|---|---|---|
+| 1~4 (동기화·배치·파일생성) | — | **완료. 잘 동작 중** |
+| 5 STEP 임포트 | **없음** (4개 문서 전부 침묵) | GUI 필요 |
+| 6 매핑 임포트 | **없음** | GUI 필요 |
+| 검증 (등록 확인) | **OI API 로 가능** | **지금 구현 가능** ★ |
+
+**공식 문서 4종(API 135p / Overview 303p / Admin 434p / Module 292p+)
+어디에도 3D 임포트의 CLI·API 경로가 없다.** 이것이 확정적 결론이다.
+
+### 그럼에도 확보한 실질적 성과
+
+1. **Mapping.xdm / Alignment.dat 규격을 문서로 확정**했다 (p.283, p.286-292).
+   현재 파이프라인 출력이 규격에 부합함을 확인했다 (`ALT:` 키워드만 확인 필요).
+2. **STEP 저장 구조를 규명**했다 — `Model3D → DocumentRef → 3DModelsDocuments`,
+   키 형식 `User:<모델명>:1:1`.
+3. **Bulk Import 가 디렉터리 단위 입력**을 받으므로 (p.283)
+   날짜 폴더를 그대로 지정하면 GUI 조작 1회로 N건이 처리된다.
+   현재 파이프라인 구조가 이미 최적이다.
+4. **검증 자동화 경로 확보** — `UserModel` 조회로 배치한 부품이 실제
+   등록됐는지 확인 가능. 5·6단계가 수동이어도 **누락은 자동 검출**할 수 있다.
+
+### 남은 가능성 (미검증)
+
+43항의 구조가 Admin 가이드 p.427-430 의 Document 벌크 로드 규격과
+일치하므로, 이론적으로는 다음이 가능할 수 있다.
+
+    ① xml-console -blobdir → 3DModelsDocuments 에 STEP 파일 적재
+    ② OI API createObject  → Model3D/UserModel 객체 생성
+    ③ DocumentRef 연결
+
+**단 지오메트리 변환·프리뷰 생성은 여전히 공백이다.**
+Bulk Import 가 네이티브 실행파일로 수행하는 그 처리를 대체할 수단이 없다.
+껍데기 레코드만 생길 위험이 크므로 **운영 적용은 권하지 않는다.**
+시도한다면 반드시 테스트 DB 에서, 그리고 Cockpit 에서 3D 형상이
+정상 표시되는지 눈으로 확인해야 한다.
+
+## 46. 권고
+
+**지금 할 것**: 검증 자동화. 5·6단계 수동은 유지하되
+배치 폴더의 부품이 DB 에 등록됐는지 파이프라인이 자동 확인하게 한다.
+누락을 사람이 눈으로 찾지 않아도 된다.
+
+**하지 말 것**: 미문서화 실행파일(`BulkImportWorker.exe` 등) 역공학.
+`-handshk` 토큰 의존성이 있고(9항) 버전 업 시 깨진다.
+
+**확인할 것**: 우리 `ALT:` vs 매뉴얼 `ALT_CELL:` 키워드 불일치 (44-1).
+현재 빈 값이라 문제없어 보이나, 대체 셀을 쓰게 되면 영향이 있다.
