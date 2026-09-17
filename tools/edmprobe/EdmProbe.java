@@ -43,6 +43,10 @@ public class EdmProbe {
             System.out.println("[4] UserModel objects (imported 3D models):");
             dumpUserModels(omf);
 
+            System.out.println();
+            System.out.println("[5] WRITE-CAPABILITY PROBE (read-only: no object is created)");
+            probeWriteApi(omf);
+
         } catch (Throwable e) {
             System.out.println();
             System.out.println("[오류] " + e.getClass().getName());
@@ -291,6 +295,121 @@ public class EdmProbe {
             System.out.println(sb);
         }
         System.out.println("        total listed: " + n);
+    }
+
+    /**
+     * 쓰기 API 가 존재하는지, STEP 파일을 넣을 BLOB 필드가 있는지 조사한다.
+     *
+     * ★ 이 메서드는 아무것도 생성/수정/삭제하지 않는다. ★
+     *   메서드 시그니처와 필드 메타데이터만 읽는다.
+     */
+    private static void probeWriteApi(OIObjectManagerFactory omf) {
+        try {
+            Object om = omf.createObjectManager();
+
+            System.out.println("    (a) write-ish methods on OIObjectManager:");
+            for (java.lang.reflect.Method m : om.getClass().getMethods()) {
+                String n = m.getName();
+                if (n.startsWith("create") || n.startsWith("makePermanent") || n.startsWith("delete")
+                        || n.startsWith("lock") || n.startsWith("commit") || n.startsWith("refresh")) {
+                    StringBuilder ps = new StringBuilder();
+                    for (Class<?> p : m.getParameterTypes()) {
+                        if (ps.length() > 0) {
+                            ps.append(", ");
+                        }
+                        ps.append(p.getSimpleName());
+                    }
+                    System.out.println("        " + n + "(" + ps + ") -> " + m.getReturnType().getSimpleName());
+                }
+            }
+
+            System.out.println();
+            System.out.println("    (b) Model3D field types (looking for BLOB):");
+            Object cm = omf.getClass().getMethod("getClassManager").invoke(omf);
+            Object arr = cm.getClass().getMethod("getAllClasses").invoke(cm);
+            for (Object c : (Object[]) arr) {
+                String path = String.valueOf(c.getClass().getMethod("getPath").invoke(c));
+                if (!path.equals("Model3D") && !path.equals("Model3D/3DModel/UserModel")) {
+                    continue;
+                }
+                System.out.println("        --- " + path + " ---");
+                Object fs = c.getClass().getMethod("getFields").invoke(c);
+                for (Object f : (Collection<?>) fs) {
+                    String fname = String.valueOf(f.getClass().getMethod("getName").invoke(f));
+                    String iface = "";
+                    for (Class<?> i : f.getClass().getInterfaces()) {
+                        iface = i.getSimpleName();
+                        break;
+                    }
+                    String extra = "";
+                    for (String g : new String[] { "getType", "getDataType", "isReadOnly", "isRequired" }) {
+                        try {
+                            Object v = f.getClass().getMethod(g).invoke(f);
+                            extra += " " + g.replace("get", "").replace("is", "") + "=" + v;
+                        } catch (Exception ignored) {
+                            // 해당 버전에 없는 접근자
+                        }
+                    }
+                    boolean interesting = iface.toLowerCase().contains("blob")
+                            || fname.toLowerCase().contains("preview")
+                            || fname.toLowerCase().contains("document")
+                            || fname.toLowerCase().contains("ref")
+                            || fname.equals("ModelName") || fname.equals("Vendor");
+                    if (interesting) {
+                        System.out.println("            " + fname + "  [" + iface + "]" + extra);
+                    }
+                }
+            }
+            System.out.println();
+            System.out.println("    (c) classes that DO have BLOB fields (where file bytes live):");
+            for (Object c : (Object[]) arr) {
+                String path = String.valueOf(c.getClass().getMethod("getPath").invoke(c));
+                Object fs = c.getClass().getMethod("getFields").invoke(c);
+                StringBuilder blobs = new StringBuilder();
+                for (Object f : (Collection<?>) fs) {
+                    String iface = "";
+                    for (Class<?> i : f.getClass().getInterfaces()) {
+                        iface = i.getSimpleName();
+                        break;
+                    }
+                    if (iface.toLowerCase().contains("blob")) {
+                        if (blobs.length() > 0) {
+                            blobs.append(", ");
+                        }
+                        blobs.append(f.getClass().getMethod("getName").invoke(f));
+                    }
+                }
+                if (blobs.length() > 0) {
+                    System.out.println("        " + path + "  ->  " + blobs);
+                }
+            }
+
+            System.out.println();
+            System.out.println("    (d) 3DModelsDocuments / Document-ish class fields:");
+            for (Object c : (Object[]) arr) {
+                String path = String.valueOf(c.getClass().getMethod("getPath").invoke(c));
+                if (!path.contains("Document")) {
+                    continue;
+                }
+                System.out.println("        --- " + path + " ---");
+                Object fs = c.getClass().getMethod("getFields").invoke(c);
+                for (Object f : (Collection<?>) fs) {
+                    String fname = String.valueOf(f.getClass().getMethod("getName").invoke(f));
+                    String iface = "";
+                    for (Class<?> i : f.getClass().getInterfaces()) {
+                        iface = i.getSimpleName();
+                        break;
+                    }
+                    if (fname.startsWith("obj_") || fname.endsWith("At") || fname.endsWith("By")) {
+                        continue;
+                    }
+                    System.out.println("            " + fname + "  [" + iface + "]");
+                }
+            }
+        } catch (Throwable t) {
+            Throwable r = (t.getCause() != null) ? t.getCause() : t;
+            System.out.println("    probe failed: " + r.getClass().getSimpleName() + " - " + r.getMessage());
+        }
     }
 
     /** OI Cursor 를 순회해 결과를 출력한다. */

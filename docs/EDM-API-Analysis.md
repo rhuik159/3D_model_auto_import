@@ -707,3 +707,122 @@ Cockpit 자체가 별도 라이선스로 기동되므로 `api_conf` 의 역할�
       EdmProbe api_conf_lib
 
 **주의**: 콘솔 한글은 코드페이지 문제로 깨져 보인다. 출력은 영문 위주로 작성했다.
+
+---
+
+# 【쓰기 가능성 조사 2026-09-17 17시】 — 탐색만 수행 (DB 무변경)
+
+사용자 요청: 5단계(모델 등록)가 안 되면 6단계(매핑)는 의미가 없으므로
+쓰기 API 를 확인할 것. 테스트 DB 이므로 진행 가능.
+**범위는 "탐색만" 으로 합의. 객체를 생성하지 않았고 DB 는 전혀 변경되지 않았다.**
+
+## 27. 접근 구조 — 이 장비에 서버·DB 가 없어도 된다
+
+    이 장비                      EDM 서버 (10.102.69.191)      DB 서버
+    ───────                      ────────────────────────     ──────
+    EdmProbe (Java) ──OI API──►   IS3/CORBA :31000      ──►   (EDM 이 관리)
+    Cockpit         ──────────►
+
+**OI API 는 EDM 서버에 붙는 클라이언트 API 이며 DB 에 직접 연결하지 않는다.**
+서버가 DB 접근을 대행하고 권한·락·무결성을 처리한다.
+21항에서 이 장비의 `EdmProbe` 가 원격 서버의 351개 클래스를 읽어온 것이 증거다.
+
+→ **DB 직접 접속은 불필요하며 권장되지도 않는다** (EDM 의 객체 모델과 락을 우회).
+   필요한 것은 네트워크 경로 + `api_conf_lib` + jar 뿐이고 이미 모두 갖춰져 있다.
+
+## 28. 쓰기 API 는 전부 존재한다 ★
+
+`OIObjectManager` 의 실제 메서드 (매뉴얼 p.55·57 과 일치):
+
+    createObject(String)              -> OIObject
+    makePermanent(OIObject)           -> void
+    makePermanent(Collection)         -> void
+    deleteObject(OIObject)            -> void
+    refreshAndLockObject(OIObject)    -> void
+    refreshObject(OIObject|Collection)-> void
+    createQuery(String, boolean)      -> OIQuery
+
+**즉 Model3D 객체를 API 로 생성하는 것 자체는 막혀 있지 않다.**
+(실제 생성은 시도하지 않았다 — 합의된 범위 밖)
+
+## 29. ★ 그러나 STEP 파일을 넣을 BLOB 필드가 없다 ★
+
+`Model3D` 와 `Model3D/3DModel/UserModel` 의 필드 타입을 전수 확인한 결과:
+
+| 필드 | 타입 |
+|---|---|
+| ModelName, Vendor | `OIStringField` (STRING) |
+| PackageRef, SeriesFileRef, DocumentRef | `OIReferenceField` (REFERENCE) |
+| 3DModelToCompRef, 3DModelToCellRef | `OIReferenceField` (REFERENCE) |
+| 3DModelToCompRefKey, ModelToComponentRefKey | `OIStringField` (STRING) |
+| **Preview3DModel** | **`OIActionField` (ACTION)** ← BLOB 아님, 실행 트리거 |
+
+**`OIBlobField` 가 하나도 없다.**
+
+### BLOB 을 가진 클래스는 따로 있다
+
+전체 351개 클래스를 스캔한 결과 BLOB 보유 클래스는 다음뿐이다.
+
+    Picture                        -> PictureBlob
+    VariantBOM                     -> VariantBlob
+    Mapping (+ RootMapping/SMC/*)  -> HkpBlob
+    DXSymbol (+ 하위)              -> HkpBlob, OleBlob
+
+→ **Model3D 계열은 목록에 없다.**
+
+`Mapping/RootMapping/SMC/...` 계층이 보이는 점은 주목할 만하다.
+Import Mapping File 다이얼로그의 `Import to library: SMC` 와 일치하며,
+M04_diode / M20_fixed_resistor 등 Cockpit 좌측 트리와 같은 파티션 구조다.
+
+### Document 클래스도 BLOB 이 아니다
+
+`DocumentRef` 가 가리키는 `Document` 클래스의 필드:
+
+    Path [OIStringField]          ← 파일시스템 경로 (문자열)
+    FileInformation [OISetField]
+    CheckOutStatus [OIIntegerField]
+    DocumentName, DocumentKey, TitleOfDocument [OIStringField]
+    MajorVersion / MinorVersion, CreationDate, Status ...
+
+**파일 본체는 DB BLOB 이 아니라 파일시스템 경로로 참조된다.**
+
+## 30. 5단계에 대한 판단 — 부정적
+
+종합하면 STEP 파일을 OI API 로 등록하는 경로가 보이지 않는다.
+
+1. `Model3D` 에 파일 바이트를 담을 BLOB 필드가 없다
+2. `Preview3DModel` 이 ACTION 타입이라는 것은 **서버/클라이언트가 실행하는
+   동작**이지 데이터 슬롯이 아니라는 뜻이다
+3. 9항의 `ACGExecutor` 가 `BulkImportWorker.exe` 를 호출하는 구조와 정합한다
+   — 지오메트리 파싱·변환·프리뷰 생성은 네이티브 실행파일의 몫이다
+4. 따라서 `createObject("Model3D/...")` 로 레코드만 만들어도
+   **실제 3D 형상이 없는 껍데기**가 될 가능성이 높다
+
+**→ 5단계(모델 등록)는 OI API 만으로는 자동화하기 어렵다.**
+   Bulk Import 가 수행하는 것은 DB 레코드 생성 + 네이티브 변환의 조합이며,
+   후자를 API 가 대체하지 못한다.
+
+## 31. 그래서 6단계도 재평가가 필요하다
+
+사용자 지적대로 5단계가 막히면 6단계만으로는 효용이 제한된다.
+다만 완전히 무의미하지는 않다.
+
+**여전히 가치 있는 시나리오**
+- 모델 등록은 Cockpit 으로 수동 1회, 이후 **매핑 연결만 자동화**
+  (`3DModelToCompRef` 는 REFERENCE 필드이므로 API 로 설정 가능해 보인다)
+- 부품이 많고 모델이 재사용되는 경우 매핑 작업량이 더 크다면 실익이 있다
+
+**현 시점의 현실적 권고**
+1. 5·6단계 모두 Cockpit 수동 유지 (현행)
+2. 1~4단계 자동 파이프라인은 그대로 유지 — 이미 잘 동작한다
+3. **Import 완료 검증을 자동화**하는 것이 투자 대비 효과가 가장 크다.
+   `UserModel` 조회가 실증되었으므로(23항), 배치 폴더의 부품이 실제로
+   DB 에 등록됐는지 OI API 로 확인하는 스크립트는 지금 바로 만들 수 있다
+
+## 32. 남은 확인 사항
+
+- `Preview3DModel` ACTION 필드가 무엇을 실행하는지 (OIActionField API)
+- Bulk Import 직후 `Document.Path` 에 어떤 경로가 기록되는지
+  → 임포트된 4건을 조회하면 파일이 어디로 복사되는지 드러난다
+- `xml-console` 로 Model3D 객체를 XML import 할 수 있는지
+  (Administrators 가이드 Appendix B 필요)
