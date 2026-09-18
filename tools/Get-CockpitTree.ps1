@@ -150,11 +150,11 @@ Add-Line "총 $($script:hitCount) 개 노드$(if ($Filter) { " (필터: '$Filter
 # ---------------------------------------------------------------- 파일 출력
 if ($OutFile -ne '') {
     $utf8bom = New-Object System.Text.UTF8Encoding($true)
-    [System.IO.File]::WriteAllLines(
-        (Resolve-Path -LiteralPath (Split-Path $OutFile -Parent) |
-            Join-Path -ChildPath (Split-Path $OutFile -Leaf)),
-        $lines.ToArray(),
-        $utf8bom
-    )
+    $absPath = if ([System.IO.Path]::IsPathRooted($OutFile)) {
+        $OutFile
+    } else {
+        Join-Path (Get-Location).Path $OutFile
+    }
+    [System.IO.File]::WriteAllLines($absPath, $lines.ToArray(), $utf8bom)
     Write-Host "파일 저장: $OutFile" -ForegroundColor Green
 }

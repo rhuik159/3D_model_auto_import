@@ -38,19 +38,24 @@ using System.Text;
 
 namespace Jab
 {
-    // JAB 공식 헤더(AccessBridgePackages.h) 기준
-    // MAX_STRING_SIZE = 1024, SHORT_STRING_SIZE = 256
+    // 실측 레이아웃 (windowsaccessbridge-64.dll JRE 17.0.8.1 기준)
+    // 공식 헤더와 달리 name 이 첫 번째, role 이 세 번째다.
+    // raw dump 로 확인:
+    //   off 0x0000 name(2048)        off 0x0800 description(2048)
+    //   off 0x1000 role(512)         off 0x1200 role_en_US(512)
+    //   off 0x1400 states(512)       off 0x1600 states_en_US(512)
+    //   off 0x1800 indexInParent(int) childrenCount x y w h + BOOL×5
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     public struct AccessibleContextInfo
     {
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
-        public string role;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
-        public string role_en_US;
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 1024)]
         public string name;
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 1024)]
         public string description;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
+        public string role;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
+        public string role_en_US;
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
         public string states;
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
@@ -340,11 +345,11 @@ function Get-JabActions {
     if (-not [Jab.Bridge]::getAccessibleActions($VmId, $Ac, [ref]$actions)) {
         return @()
     }
-    $result = @()
+    $result = [System.Collections.Generic.List[string]]::new()
     for ($i = 0; $i -lt $actions.actionsCount; $i++) {
-        $result += $actions.actionInfo[$i].name
+        $result.Add($actions.actionInfo[$i].name)
     }
-    $result
+    , $result.ToArray()   # 쉼표로 배열 래핑 - 단일 항목도 배열로 반환
 }
 
 function Invoke-JabAction {
