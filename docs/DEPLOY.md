@@ -95,6 +95,32 @@ Cockpit 창을 띄우고 마우스/키보드를 보내는 방식이므로, 세�
 
 ## 3. 배포 후 점검 순서
 
+### ★ 0단계: JAB 활성화 (계정별, 빼먹기 쉬움) ★
+
+**Java Access Bridge 는 계정마다 따로 켜야 한다.** 개발 PC 에서 켰다고
+운영 서버 계정에 켜져 있는 게 아니다. 안 켜면 5~6단계가
+`HWND 0x... 는 Java 창이 아닙니다` 로 실패한다.
+
+**파이프라인을 실행할 그 계정으로 로그온한 상태에서** 실행한다.
+```powershell
+. .\tools\Common.SddHome.ps1
+Test-JabEnabled          # Enabled = True 면 이미 켜져 있음
+
+# False 면:
+& "$(Get-SddHome)\common\win64\jre\default\bin\jabswitch.exe" /enable
+```
+
+실행하면 `%USERPROFILE%\.accessibility.properties` 가 만들어진다.
+**이미 떠 있는 Cockpit 은 완전히 종료했다가 다시 띄워야 적용된다**
+(JVM 이 기동할 때 이 파일을 읽기 때문).
+
+```powershell
+# 다른 사용자로 실행해야 한다면
+runas /user:DOMAIN\svc_3dsync "cmd /c \"...\jabswitch.exe\" /enable"
+```
+
+### 이후 단계
+
 ```powershell
 # 1) 설정 검증 + 연결성 확인 (아무것도 바꾸지 않음)
 .\Run-Sync.bat -WhatIf
@@ -246,6 +272,7 @@ Select-String -Path logs\sync_*.log -Pattern '\[Error\]' | Select-Object -Last 5
 
 | 증상 | 원인 후보 | 확인 |
 |---|---|---|
+| `... 는 Java 창이 아닙니다` | **JAB 미활성화 (계정별)** | 3장 0단계. `Test-JabEnabled` |
 | `[Step1]` 접근 불가 (exit 3) | 공유 권한/네트워크 | `Test-Path` 로 UNC 확인, 계정 권한 |
 | `Cockpit 이 준비되지 않았습니다` | 서버 접속 실패, 관문 창 추가됨 | **Cockpit 로그**, 화면에 낯선 창이 떴는지 |
 | `메뉴 항목 ... 선택하지 못했습니다` | 메뉴 구성 변경, 배율 문제 | 4장 배율 항목, 메뉴 이름이 바뀌었는지 |

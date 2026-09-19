@@ -107,6 +107,78 @@ function Get-SddHome {
            "  다른 위치에 설치했다면 환경변수 XPEDITION_SDD_HOME 을 설정하세요.")
 }
 
+function Test-JabEnabled {
+    <#
+    .SYNOPSIS
+        현재 사용자 계정에 Java Access Bridge 가 활성화돼 있는지 확인한다.
+
+    .DESCRIPTION
+        JAB 활성화는 **계정별**이다. jabswitch /enable 이 사용자 홈에
+        .accessibility.properties 를 만들고, JVM 이 기동할 때 그 파일을 읽는다.
+
+        활성화가 안 된 계정에서 돌리면 isJavaWindow() 가 false 를 돌려주고
+        "HWND 0x... 는 Java 창이 아닙니다" 로 실패한다. 원인이 드러나지 않는
+        메시지라 이 함수로 미리 확인한다.
+
+        개발 PC 에서 한 번 켰다고 운영 서버 계정에도 켜져 있는 게 아니다.
+
+    .OUTPUTS
+        PSCustomObject { Enabled, PropertiesPath, JabSwitchPath, Detail }
+    #>
+    param([string]$SddHome = '')
+
+    $propPath = Join-Path $env:USERPROFILE '.accessibility.properties'
+    $enabled  = $false
+    $detail   = ''
+
+    if (Test-Path -LiteralPath $propPath) {
+        $content = Get-Content -LiteralPath $propPath -Raw -ErrorAction SilentlyContinue
+        if ($content -match 'assistive_technologies\s*=.*AccessBridge') {
+            $enabled = $true
+            $detail  = 'AccessBridge 등록됨'
+        } else {
+            $detail = "$propPath 는 있으나 AccessBridge 항목이 없습니다"
+        }
+    } else {
+        $detail = "$propPath 가 없습니다 (jabswitch 미실행)"
+    }
+
+    $jabSwitch = ''
+    try {
+        if (-not $SddHome) { $SddHome = Get-SddHome }
+        $c = Join-Path $SddHome 'common\win64\jre\default\bin\jabswitch.exe'
+        if (Test-Path -LiteralPath $c) { $jabSwitch = $c }
+    } catch { }
+
+    [PSCustomObject]@{
+        Enabled        = $enabled
+        PropertiesPath = $propPath
+        JabSwitchPath  = $jabSwitch
+        Detail         = $detail
+    }
+}
+
+function Assert-JabEnabled {
+    <#
+    .SYNOPSIS
+        JAB 가 꺼져 있으면 조치 방법을 담아 예외를 던진다.
+    #>
+    param([string]$SddHome = '')
+    $s = Test-JabEnabled -SddHome $SddHome
+    if ($s.Enabled) { return $true }
+
+    $cmd = if ($s.JabSwitchPath) { "`"$($s.JabSwitchPath)`" /enable" } else { 'jabswitch /enable' }
+    throw ("Java Access Bridge 가 이 계정에 활성화돼 있지 않습니다.`n" +
+           "  계정   : $env:USERDOMAIN\$env:USERNAME`n" +
+           "  확인   : $($s.Detail)`n" +
+           "`n" +
+           "  조치 (이 계정으로 로그온한 상태에서 실행):`n" +
+           "    $cmd`n" +
+           "`n" +
+           "  실행 후 Cockpit 을 완전히 종료했다가 다시 띄워야 적용됩니다.`n" +
+           "  JAB 활성화는 계정별이라 다른 계정에서 켠 것은 소용없습니다.")
+}
+
 function Get-JabDllPath {
     <#
     .SYNOPSIS

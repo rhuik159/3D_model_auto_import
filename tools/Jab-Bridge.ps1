@@ -677,7 +677,17 @@ function Initialize-Jab {
     }
 
     if (-not [Jab.Bridge]::isJavaWindow($Hwnd)) {
-        throw "HWND 0x$($Hwnd.ToString('X')) 는 Java 창이 아닙니다. JAB 가 활성화됐는지 확인하세요."
+        # 가장 흔한 원인은 이 계정에 JAB 이 활성화되지 않은 것이다.
+        # 그냥 "Java 창이 아니다" 라고만 하면 원인을 찾기 어려우므로 먼저 확인한다.
+        Assert-JabEnabled | Out-Null
+
+        # JAB 은 켜져 있는데도 실패한 경우 (대화상자가 떠서 핸들이 바뀌었거나,
+        # Cockpit 이 아직 창을 다 만들지 않았거나)
+        throw ("HWND 0x$($Hwnd.ToString('X')) 는 Java 창이 아닙니다.`n" +
+               "  JAB 은 이 계정에 활성화돼 있습니다. 다른 원인을 확인하세요:`n" +
+               "   - Cockpit 이 아직 창을 만드는 중인가 (기동 직후)`n" +
+               "   - 대화상자가 떠서 메인 창 핸들이 바뀌었는가`n" +
+               "   - 32/64비트 불일치 (windowsaccessbridge-64.dll 과 JRE)")
     }
 
     $vmId = 0
