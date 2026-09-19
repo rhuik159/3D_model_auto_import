@@ -1,14 +1,17 @@
 ﻿<#
 .SYNOPSIS
-    Xpedition EDM Library 3D 모델 자동 등록 파이프라인 (1~4단계).
+    Xpedition EDM Library 3D 모델 자동 등록 파이프라인 (1~6단계).
 
 .DESCRIPTION
     1. 공정기술 공유폴더 -> 설계팀 라이브러리 동기화 (robocopy, /MIR 미사용)
     2. 라이브러리 전체 목록 CSV 출력 + SHA-256 스냅샷 비교
-    3. 업데이트분에 대한 매핑 파일 생성 (★포맷 미확정 - 스텁)
+    3. 업데이트분에 대한 매핑 파일 생성
     4. 업데이트분을 yyyy-MM-dd 폴더로 복사 (Import 작업 배치)
+    5. Cockpit GUI 자동화 - 3D Models Bulk Import
+    6. Cockpit GUI 자동화 - Import Mapping File
 
-    5~6단계(Xpedition Import)는 수동. docs\README.md 참조.
+    5~6단계는 JAB(Java Access Bridge)로 Cockpit Swing UI 를 제어한다.
+    GUI 자동화라 화면 세션이 필요하다. 기본적으로 작업 후 Cockpit 을 닫는다.
 
 .PARAMETER ConfigPath
     설정 파일 경로. 기본값: .\config\config.json
@@ -25,9 +28,24 @@
     스냅샷을 무시하고 전체를 다시 해싱해 기준선을 새로 만든다.
     날짜 폴더는 생성하지 않는다.
 
+.PARAMETER SkipImport
+    5~6단계(Cockpit Import)를 건너뛴다. 날짜 폴더까지만 만들고 끝낸다.
+    GUI 세션이 없는 환경이나 Import 를 수동으로 하고 싶을 때 사용.
+
+.PARAMETER KeepCockpitOpen
+    Import 후 Cockpit 을 닫지 않고 그대로 둔다 (결과 확인용).
+    기본 동작은 종료다.
+
+.PARAMETER ReuseCockpit
+    이미 떠 있는 Cockpit 이 있으면 새로 띄우지 않고 재사용한다.
+
 .EXAMPLE
     .\Run-3DModelSync.ps1 -WhatIf
     실제 공유폴더 대상 무해 점검 (연결성/권한/변경집합 확인)
+
+.EXAMPLE
+    .\Run-3DModelSync.ps1 -SkipImport
+    4단계까지만 수행 (Import 는 나중에 수동으로)
 
 .NOTES
     종료코드:
@@ -38,6 +56,7 @@
       4  스캔/해시 실패
       5  스냅샷 손상 또는 배치 생성 실패
       6  다른 실행이 진행 중 (락 보유)
+      7  Cockpit Import 실패 (5~6단계)
       10 예상치 못한 예외
 #>
 [CmdletBinding(SupportsShouldProcess)]
@@ -45,6 +64,9 @@ param(
     [string]$ConfigPath,
     [switch]$SkipSync,
     [switch]$ForceFullBaseline,
+    [switch]$SkipImport,
+    [switch]$KeepCockpitOpen,
+    [switch]$ReuseCockpit,
     [ValidateSet('Debug', 'Info', 'Warn', 'Error')][string]$LogLevel = 'Info'
 )
 
@@ -59,6 +81,7 @@ $RepoRoot = $PSScriptRoot
 . (Join-Path $RepoRoot 'src\Step2.ScanAndSnapshot.ps1')
 . (Join-Path $RepoRoot 'src\Step3.MappingFile.ps1')
 . (Join-Path $RepoRoot 'src\Step4.StageDateFolder.ps1')
+. (Join-Path $RepoRoot 'src\Step5.Import.ps1')
 
 if (-not $ConfigPath) { $ConfigPath = Join-Path $RepoRoot 'config\config.json' }
 
@@ -71,6 +94,8 @@ $startTime  = Get-Date
 #   -WhatIf 없이 실행해도 하위 단계의 ShouldProcess 가 false 를 반환한다
 #   (= 4단계가 조용히 건너뛰어짐).
 $isDryRun   = [bool]$WhatIfPreference
+$importFailed = $false
+$importDone   = $false
 
 try {
     # ---------------------------------------------------------------- 설정
@@ -287,9 +312,40 @@ try {
         # 배치 결과가 StagedToDateFolder 에 반영된 뒤이므로 여기서 한 번만 쓴다.
         Export-ChangesCsv -Changes $changes -Path $changesCsvPath -RunTime $runTime
 
+        # ------------------------------------------------------ 5~6단계 Import
         if ($batch.BatchPath -and $batch.StagedCount -gt 0) {
-            Write-LogBanner ("Import 대상 배치 폴더:`n  $($batch.BatchPath)`n" +
-                             "  ($($batch.StagedCount) 개 파일 - Xpedition 에서 수동 Import 하세요)")
+            if ($isDryRun) {
+                Write-LogBanner ("[WHATIF] Import 대상 배치 폴더:`n  $($batch.BatchPath)`n" +
+                                 "  ($($batch.StagedCount) 개 파일 - 드라이런이므로 Import 하지 않습니다)")
+            }
+            elseif ($SkipImport) {
+                Write-LogBanner ("Import 대상 배치 폴더:`n  $($batch.BatchPath)`n" +
+                                 "  ($($batch.StagedCount) 개 파일 - -SkipImport 이므로 수동 Import 하세요)")
+            }
+            else {
+                Write-LogBanner "5~6단계 Cockpit Import 시작 ($($batch.StagedCount) 개 파일)"
+                try {
+                    $imp = Invoke-Step5Import -DatePath $batch.BatchPath `
+                                              -MappingFileName $cfg.mapping.mappingFileName `
+                                              -Reuse:$ReuseCockpit `
+                                              -CloseCockpit:(-not $KeepCockpitOpen)
+                    if ($imp.Success) {
+                        Write-Log "Cockpit Import 완료" -Level Info -Step 'Step5'
+                        $importDone = $true
+                    }
+                }
+                catch {
+                    # 스냅샷을 갱신하지 않고 빠져나간다.
+                    # 갱신해 버리면 이번 변경분이 '기존' 으로 흡수되어 영영 Import 되지 않는다.
+                    Write-Log ("Cockpit Import 실패: $($_.Exception.Message)`n" +
+                               "  스냅샷을 갱신하지 않습니다. 원인 조치 후 다시 실행하면`n" +
+                               "  같은 변경분을 다시 처리합니다.") -Level Error -Step 'Step5'
+                    $importFailed = $true
+                }
+            }
+        }
+        elseif ($batch.BatchPath) {
+            Write-Log "배치에 파일이 없어 Import 를 건너뜁니다." -Level Info -Step 'Step5'
         }
     }
 
@@ -298,6 +354,10 @@ try {
     if ($isDryRun) {
         Write-Log "[WHATIF] would 스냅샷 기록 $snapPath ($($files.Count) 건)" -Level Info -Step 'Step2'
     }
+    elseif ($importFailed) {
+        Write-Log ("Import 가 실패해 스냅샷을 갱신하지 않습니다.`n" +
+                   "  다음 실행에서 같은 변경분을 다시 Import 합니다.") -Level Warn -Step 'Step2'
+    }
     else {
         Write-Snapshot -Path $snapPath -SourceRoot $cfg.paths.designLibrary `
                        -Files $files -IsBaseline:$baselineOnly
@@ -305,10 +365,15 @@ try {
     }
 
     $warnCount = Get-LogWarningCount
-    if ($warnCount -gt 0 -and $exitCode -eq 0) { $exitCode = 1 }
+    if ($importFailed) { $exitCode = 7 }
+    elseif ($warnCount -gt 0 -and $exitCode -eq 0) { $exitCode = 1 }
 
     $elapsed = (Get-Date) - $startTime
-    Write-LogBanner ("완료 - 소요 {0:mm\:ss}, 경고 {1} 건, 종료코드 {2}" -f $elapsed, $warnCount, $exitCode)
+    $importNote = if ($importDone)        { ', Import 완료' }
+                  elseif ($importFailed)  { ', Import 실패' }
+                  else                    { '' }
+    Write-LogBanner ("완료 - 소요 {0:mm\:ss}, 경고 {1} 건{2}, 종료코드 {3}" -f `
+                     $elapsed, $warnCount, $importNote, $exitCode)
 }
 catch {
     if ($script:LogPath) {
@@ -321,6 +386,14 @@ catch {
     $exitCode = 10
 }
 finally {
+    # 예외로 빠져나온 경우 Invoke-Step5Import 의 finally 가 못 돌았을 수 있다.
+    # Cockpit 을 띄워놓고 죽으면 다음 실행이 유령 인스턴스와 엉키므로 정리한다.
+    # (-KeepCockpitOpen 이면 사용자가 의도한 것이므로 남겨둔다)
+    if (-not $KeepCockpitOpen -and -not $SkipImport -and -not $isDryRun) {
+        if (Get-Command Stop-Cockpit -ErrorAction SilentlyContinue) {
+            try { $null = Stop-Cockpit } catch { }
+        }
+    }
     if ($lockPath) { Remove-RunLock -LockStream $lockStream -LockPath $lockPath }
 }
 
