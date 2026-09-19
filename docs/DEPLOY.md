@@ -202,3 +202,81 @@ Get-JabDllPath
 ### 설치 위치가 아예 다를 때
 `C:` / `D:` 의 `MentorGraphics` 가 아니면 자동 탐색이 못 찾는다.
 위 환경변수를 쓰거나, `Get-SddHome -SearchRoots` 기본값을 수정한다.
+
+---
+
+## 6. 실패했을 때 로그 보는 법
+
+### 로그 위치
+
+| 파일 | 내용 |
+|---|---|
+| `logs\sync_YYYY-MM-DD.log` | **여기부터 본다.** 파이프라인 전체 진행/실패 |
+| `logs\robocopy_YYYY-MM-DD.log` | 1단계 파일 복사 상세 |
+| `%TEMP%\%USERNAME%\expedition\2011.1\EExDMLibraryClient_*.log` | **Cockpit 자체 로그.** 5~6단계 실패 시 |
+| `output\changes_YYYY-MM-DD.csv` | 그날 감지된 변경 목록 (누적) |
+| `output\filelist_YYYY-MM-DD.csv` | 라이브러리 전체 현황 |
+
+로그는 날짜별로 쌓이고 `retention.logDays`(기본 90일) 지나면 자동 삭제된다.
+
+### 1단계: 종료 코드 확인
+
+스케줄러로 돌렸다면:
+```powershell
+(Get-ScheduledTaskInfo -TaskName '3D_Model_Auto_Import').LastTaskResult
+```
+`0`/`1` 은 정상. 나머지는 3장의 표 참조. **`7` 이면 Cockpit Import 실패.**
+
+### 2단계: 파이프라인 로그에서 [Error] 찾기
+
+```powershell
+Select-String -Path logs\sync_*.log -Pattern '\[Error\]' | Select-Object -Last 5
+```
+
+실패 메시지는 어느 단계에서 멈췄는지 그대로 알려준다:
+```
+[Error] [Step5] Cockpit Import 실패: 메뉴 항목 'Library' 을 선택하지 못했습니다.
+[Error] [Step5] Cockpit Import 실패: 확인 버튼을 눌렀지만 대화상자가 닫히지 않았습니다.
+[Error] [Step5] Cockpit Import 실패: Cockpit 이 준비되지 않았습니다 (메뉴 바가 나타나지 않음).
+```
+
+경고만 보려면 `-Pattern '\[Warn'`.
+
+### 3단계: 증상별로 볼 곳
+
+| 증상 | 원인 후보 | 확인 |
+|---|---|---|
+| `[Step1]` 접근 불가 (exit 3) | 공유 권한/네트워크 | `Test-Path` 로 UNC 확인, 계정 권한 |
+| `Cockpit 이 준비되지 않았습니다` | 서버 접속 실패, 관문 창 추가됨 | **Cockpit 로그**, 화면에 낯선 창이 떴는지 |
+| `메뉴 항목 ... 선택하지 못했습니다` | 메뉴 구성 변경, 배율 문제 | 4장 배율 항목, 메뉴 이름이 바뀌었는지 |
+| `대화상자가 닫히지 않았습니다` | 버튼 라벨 변경, 좌표 어긋남 | 아래 대화상자 덤프 |
+| 창이 아예 안 뜸 | GUI 세션 없음 | 2장 - 스케줄러가 세션 0 에서 돌고 있는지 |
+
+### Cockpit 자체 오류
+
+파이프라인 로그에 "대화상자: 'Error'" 가 찍혔다면 Cockpit 쪽 문제다.
+이때는 Cockpit 로그를 본다.
+```powershell
+$log = "$env:TEMP\$env:USERNAME\expedition\2011.1\EExDMLibraryClient_$env:USERNAME.log"
+Select-String -Path $log -Pattern 'ERROR|Exception|Caused by' | Select-Object -Last 20
+```
+
+실제 사례: `Could not get DMSInstance reference object` — 서버 세션 문제였고
+자동화로는 해결 불가. 서버/라이선스 설정을 봐야 했다.
+
+### 낯선 대화상자에서 멈출 때
+
+서버 설정이 바뀌면 새 관문 창이 생길 수 있다. 구조를 덤프해 확인한다.
+```powershell
+.\tools\Inspect-BulkImportDialog.ps1
+```
+창 제목, 버튼 이름, 좌표가 출력된다. 이걸 보고
+`Jab-Bridge.ps1` 의 `Dismiss-CockpitStartupDialog` 에 핸들러를 추가한다.
+
+### 실패해도 데이터는 안전하다
+
+**Import 실패(exit 7) 시 스냅샷을 갱신하지 않는다.** 원인을 고치고 다시
+실행하면 같은 변경분을 그대로 재처리하므로 누락이 없다.
+
+반대로 말하면, 실패를 방치하면 그 파일은 계속 미처리 상태로 남는다.
+`logs\` 의 `[Error]` 를 주기적으로 확인할 것.
