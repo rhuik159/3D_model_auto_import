@@ -45,7 +45,10 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$SddHome = 'C:\MentorGraphics\EEVX.2.14.1\SDD_HOME'
+# 설치 경로는 툴 버전이 올라가면 바뀐다(EEVX.2.14.1 → EEVX.2.15 등).
+# Common.SddHome.ps1 이 환경변수 → 최신 버전 순으로 찾아준다.
+. (Join-Path $PSScriptRoot 'Common.SddHome.ps1')
+$SddHome = Get-SddHome
 $DmsBin = Join-Path $SddHome 'dms\bin'
 $Launcher = Join-Path $DmsBin 'dmsdesktop.bat'
 $AutoLogin = Join-Path $SddHome 'common\win64\bin\app-auto-login.exe'

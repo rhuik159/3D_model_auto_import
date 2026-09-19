@@ -20,6 +20,7 @@ src\Step3.MappingFile.ps1    Mapping.xdm / Alignment.dat 생성
 src\Step4.StageDateFolder.ps1  날짜 폴더 배치
 src\Step5.Import.ps1         5~6단계 Cockpit Import + Cockpit 종료
 
+tools\Common.SddHome.ps1     Xpedition 설치 경로 탐색 (버전 변경 대응)
 tools\Jab-Bridge.ps1         JAB P/Invoke 래퍼 (5~6단계 핵심)
 tools\Start-Cockpit.ps1      Cockpit 자동 기동
 
@@ -152,3 +153,52 @@ JAB 은 배율이 적용되지 않은 좌표를 준다. 코드가 창 크기로 
 - 개인 계정은 암호 변경/퇴사 시 중단되므로 전용 서비스 계정 권장.
 - Cockpit 프로필에 있어야 한다.
   `app-auto-login.exe -list` 로 확인.
+
+---
+
+## 5. 툴(Xpedition) 버전이 바뀌면
+
+**코드를 고칠 필요가 없다.** 설치 경로는 `tools\Common.SddHome.ps1` 이
+실행할 때마다 찾는다. 예전에는 `C:\MentorGraphics\EEVX.2.14.1` 이
+세 파일에 하드코딩돼 있었다.
+
+### 탐색 순서
+1. 환경변수 `XPEDITION_SDD_HOME`
+2. 환경변수 `SDD_HOME`
+3. `C:\MentorGraphics\EEVX.*` 중 **가장 최신 버전**
+4. `D:\MentorGraphics\EEVX.*`
+
+버전은 문자열이 아니라 숫자로 비교한다(`EEVX.2.9 < EEVX.2.14.1`).
+
+### 후보 검증
+폴더가 있다고 바로 쓰지 않고, 아래 파일이 **둘 다** 있어야 채택한다.
+```
+common\win64\jre\default\bin\windowsaccessbridge-64.dll   (JAB)
+dms\bin\dmsdesktop.bat                                    (Cockpit 기동)
+```
+
+이 검증이 없으면 실제로 깨진다. 개발 PC 에는 `EEVX.2.14` 와 `EEVX.2.14.1`
+이 둘 다 있는데 환경변수 `SDD_HOME` 은 **두 파일이 모두 없는 `EEVX.2.14`**
+를 가리키고 있었다. 검증 없이 환경변수를 믿었다면 멀쩡히 돌던 자동화가
+버전 업그레이드도 아닌 상황에서 깨졌을 것이다.
+
+### 확인 방법
+```powershell
+. .\tools\Common.SddHome.ps1
+Get-SddHome -Verbose      # 어떤 경로를 왜 골랐는지 출력
+Get-JabDllPath
+```
+
+### 특정 버전으로 고정하고 싶을 때
+여러 버전이 깔려 있는데 최신이 아닌 것을 써야 한다면 환경변수로 지정한다.
+```powershell
+[Environment]::SetEnvironmentVariable(
+    'XPEDITION_SDD_HOME',
+    'C:\MentorGraphics\EEVX.2.14.1\SDD_HOME',
+    'Machine')
+```
+(스케줄러 계정에도 보이도록 `Machine` 범위로 설정할 것)
+
+### 설치 위치가 아예 다를 때
+`C:` / `D:` 의 `MentorGraphics` 가 아니면 자동 탐색이 못 찾는다.
+위 환경변수를 쓰거나, `Get-SddHome -SearchRoots` 기본값을 수정한다.

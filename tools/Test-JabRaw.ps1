@@ -3,12 +3,16 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-Add-Type -TypeDefinition @'
+. (Join-Path $PSScriptRoot 'Common.SddHome.ps1')
+$dllPath = Get-JabDllPath
+Write-Host "JAB DLL: $dllPath"
+
+$src = @'
 using System;
 using System.Runtime.InteropServices;
 
 public class JabRaw {
-    private const string DLL = @"C:\MentorGraphics\EEVX.2.14.1\SDD_HOME\common\win64\jre\default\bin\windowsaccessbridge-64.dll";
+    private const string DLL = @"__JAB_DLL_PATH__";
     [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)] public static extern void Windows_run();
     [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)] [return:MarshalAs(UnmanagedType.Bool)]
     public static extern bool isJavaWindow(IntPtr hwnd);
@@ -28,7 +32,9 @@ public class JabRaw {
     [DllImport("user32.dll")] public static extern IntPtr DispatchMessage(ref MSG m);
     public static void Pump(int n) { MSG m; for(int i=0;i<n;i++) if(PeekMessage(out m,IntPtr.Zero,0,0,1)){TranslateMessage(ref m);DispatchMessage(ref m);} }
 }
-'@ -ErrorAction Stop
+'@
+
+Add-Type -TypeDefinition ($src -replace '__JAB_DLL_PATH__', $dllPath.Replace('$', '$$')) -ErrorAction Stop
 
 [JabRaw]::Windows_run(); [JabRaw]::Pump(100); Start-Sleep -Milliseconds 1000; [JabRaw]::Pump(100)
 

@@ -29,9 +29,17 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# 설치 경로 탐색은 Common.SddHome.ps1 이 담당한다 (버전이 올라가도 코드 수정 불필요)
+. (Join-Path $PSScriptRoot 'Common.SddHome.ps1')
+
 # ============================================================ C# 타입 정의
 if (-not ('Jab.Bridge' -as [type])) {
-    Add-Type -TypeDefinition @'
+    # DllImport 의 경로는 컴파일 시점 상수라 변수를 쓸 수 없다.
+    # 그래서 탐색한 실제 경로를 소스에 치환해 넣는다.
+    $script:JabDllPath = Get-JabDllPath
+    Write-Verbose "JAB DLL: $script:JabDllPath"
+
+    $jabSource = @'
 using System;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -98,7 +106,7 @@ namespace Jab
 
     public static class Bridge
     {
-        private const string DLL = @"C:\MentorGraphics\EEVX.2.14.1\SDD_HOME\common\win64\jre\default\bin\windowsaccessbridge-64.dll";
+        private const string DLL = @"__JAB_DLL_PATH__";
 
         // 초기화: 메시지 루프를 돌려야 JAB 가 응답한다
         [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)]
@@ -625,7 +633,12 @@ namespace Jab
         }
     }
 }
-'@ -ErrorAction Stop
+'@
+
+    # C# verbatim 문자열(@"...") 안이라 백슬래시를 이스케이프하면 안 된다.
+    # -replace 의 치환문자열에서 '$' 만 의미를 가지므로 그것만 막는다.
+    Add-Type -TypeDefinition ($jabSource -replace '__JAB_DLL_PATH__',
+                              $script:JabDllPath.Replace('$', '$$')) -ErrorAction Stop
 }
 
 # ============================================================ 전역 상태
