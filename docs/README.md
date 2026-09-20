@@ -74,7 +74,7 @@ notepad config\config.json          # <<SET-ME>> 세 곳을 실제 경로로 교
 |---|---|---|
 | `behavior.firstRunMode` | `BaselineOnly` | 최초 실행은 기준선만 생성. 기존 라이브러리를 통째로 Import 하려면 `TreatAllAsNew` |
 | `behavior.failOnZeroFilesFound` | `true` | 원본이 0건이면 중단 (공유폴더 사망 감지) |
-| `batch.includeModified` | `true` | 수정된 파일도 배치에 포함 |
+| `batch.includeModified` | `false` | 신규 파일명만 Import. 같은 파일명의 내용 변경(개정본)은 Import 하지 않는다 — 설계팀 수동 운영 규칙에 맞춘 값이다. 개정본도 재Import 하려면 `true` |
 | `retention.dateFolderDays` | `0` | 날짜 폴더 자동 삭제 안 함 |
 | `mapping.enabled` | `true` | Mapping.xdm / Alignment.dat 생성 |
 | `mapping.vendor` | `User` | VND 필드 값 |
@@ -325,3 +325,49 @@ PS 7 은 BOM 없이도 UTF-8 로 읽기 때문에 증상이 보이지 않는 것
 풀리지 않고, 같은 부품은 덮어쓰기로 갱신된다.
 
 자동화 가능 여부는 `docs/FOLLOWUP-Xpedition-Automation.md` 참조.
+
+---
+
+## 등록 검증 (EDM 서버 대조)
+
+설계팀 라이브러리의 STEP 파일이 EDM 서버에 실제로 등록돼 있는지 대조한다.
+**읽기 전용이다.** 누락을 찾아 보고만 하고, 재Import 는 하지 않는다.
+
+```powershell
+# config.json 의 라이브러리를 api_conf_lib 로 대조
+.\tools\Test-EdmRegistration.ps1
+
+# 운영 서버 (로그인 설정만 다르게)
+.\tools\Test-EdmRegistration.ps1 -LoginConfig api_conf_prod
+```
+
+라이브러리의 STEP 파일명(확장자 제외)과 EDM 의
+`Model3D/3DModel/UserModel` 의 `ModelName` 을 대조한다. 대소문자는 무시한다.
+
+### 결과 구분
+
+| Status | 의미 | 조치 |
+|---|---|---|
+| `OK` | 파일도 있고 서버에도 등록됨 | 없음 |
+| `MISSING` | **파일은 있는데 서버에 없음** | 재Import 검토 (수동) |
+| `ORPHAN` | 서버에만 있고 파일이 없음 | 파일 삭제됐거나 수동 등록분 |
+
+`DuplicateCount` 가 2 이상이면 같은 이름이 서버에 여러 건 등록된 것이다.
+
+CSV 는 `output\edm_verify_<날짜시각>.csv` 에 UTF-8 BOM 으로 기록되며
+`MISSING` 이 맨 위에 오도록 정렬된다.
+
+### 종료코드
+
+`0` 전부 정상 / `1` 미등록 있음 / `2` 설정 오류 /
+`3` 라이브러리 접근 불가 / `4` 접속·조회 실패 / `5` 컴파일 실패
+
+### 전제
+
+- 로그인 설정이 있어야 한다 (`app-auto-login -list` 로 확인).
+  운영은 서버 IP 만 다르고 설정 이름은 같게 두는 것을 권장한다.
+- 최초 1회 컴파일에 **JDK** 가 필요하다 (JRE 만으로는 안 된다).
+  JDK 가 없는 장비라면 다른 장비에서 만든 `tools\edmverify\*.class` 를
+  복사해 와도 된다.
+- 파이프라인과 독립적이다. 스냅샷을 읽지도 쓰지도 않으므로
+  파이프라인 실행 중에 돌려도 서로 간섭하지 않는다.

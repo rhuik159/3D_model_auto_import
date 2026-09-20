@@ -27,7 +27,7 @@
   },
   "batch": {
     "folderFormat": "yyyy-MM-dd",
-    "includeModified": true
+    "includeModified": false
   },
   "retention": {
     "logDays": 90,
