@@ -13,6 +13,12 @@ REM  Usage
 REM    Run-Sync.bat              normal run
 REM    Run-Sync.bat -WhatIf      dry run, changes nothing
 REM    Run-Sync.bat -SkipSync    skip robocopy, scan only
+REM    Run-Sync.bat -Verify      also check EDM registration (read-only)
+REM    Run-Sync.bat -SkipVerify  skip that check even if enabled in config
+REM
+REM  The EDM check is a diagnostic: it never changes the exit code and
+REM  never fails the run. Turn it on permanently with verify.enabled
+REM  in config.json.
 REM
 REM  Exit codes are passed through from the PowerShell script:
 REM    0=OK  1=warning  2=config error  3=unreachable  4=scan failed

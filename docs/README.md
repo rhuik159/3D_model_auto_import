@@ -76,6 +76,8 @@ notepad config\config.json          # <<SET-ME>> 세 곳을 실제 경로로 교
 | `behavior.failOnZeroFilesFound` | `true` | 원본이 0건이면 중단 (공유폴더 사망 감지) |
 | `batch.includeModified` | `false` | 신규 파일명만 Import. 같은 파일명의 내용 변경(개정본)은 Import 하지 않는다 — 설계팀 수동 운영 규칙에 맞춘 값이다. 개정본도 재Import 하려면 `true` |
 | `retention.dateFolderDays` | `0` | 날짜 폴더 자동 삭제 안 함 |
+| `verify.enabled` | `false` | 매 실행 끝에 EDM 등록 검증(읽기 전용). 종료코드에 영향 없음 |
+| `verify.loginConfig` | `api_conf_lib` | 검증에 쓸 app-auto-login 설정 이름 |
 | `mapping.enabled` | `true` | Mapping.xdm / Alignment.dat 생성 |
 | `mapping.vendor` | `User` | VND 필드 값 |
 
@@ -334,12 +336,37 @@ PS 7 은 BOM 없이도 UTF-8 로 읽기 때문에 증상이 보이지 않는 것
 **읽기 전용이다.** 누락을 찾아 보고만 하고, 재Import 는 하지 않는다.
 
 ```powershell
-# config.json 의 라이브러리를 api_conf_lib 로 대조
+# 단독 실행
 .\tools\Test-EdmRegistration.ps1
+.\tools\Test-EdmRegistration.ps1 -LoginConfig api_conf_prod   # 운영
 
-# 운영 서버 (로그인 설정만 다르게)
-.\tools\Test-EdmRegistration.ps1 -LoginConfig api_conf_prod
+# 파이프라인 끝에 함께 실행
+.\Run-Sync.bat -Verify
 ```
+
+### 파이프라인에 붙여서 쓰기
+
+매번 자동으로 돌리려면 config 에서 켠다.
+
+```json
+"verify": {
+  "enabled": true,
+  "loginConfig": "api_conf_lib"
+}
+```
+
+켜 두면 매 실행 끝에 검증이 돌고, 결과는 로그에 `[Verify]` 로 남는다.
+`-SkipVerify` 로 그때만 건너뛸 수 있다.
+
+> **검증은 진단이다. 파이프라인의 성패를 좌우하지 않는다.**
+> - 스냅샷을 기록한 **뒤에** 돌린다. 검증이 죽어도 스냅샷은 이미 남아 있어
+>   다음 실행이 같은 변경분을 다시 Import 하지 않는다.
+> - 접속 실패 등으로 검증이 실패해도 파이프라인은 정상 완료로 끝난다.
+> - 미등록을 찾아도 종료코드를 7 같은 실패로 바꾸지 않는다. 경고(1)로만 남긴다.
+> - 드라이런(`-WhatIf`)에서는 돌지 않는다.
+
+한 번에 30초 안팎 걸린다(모델 90여 건 기준). 매일 돌리기에 부담은 없지만,
+스케줄러 작업 시간 제한을 빠듯하게 잡아 두었다면 감안한다.
 
 라이브러리의 STEP 파일명(확장자 제외)과 EDM 의
 `Model3D/3DModel/UserModel` 의 `ModelName` 을 대조한다. 대소문자는 무시한다.

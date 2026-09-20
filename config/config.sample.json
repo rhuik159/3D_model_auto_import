@@ -39,6 +39,10 @@
     "failOnZeroFilesFound": true,
     "hashAlgorithm": "SHA256"
   },
+  "verify": {
+    "enabled": false,
+    "loginConfig": "api_conf_lib"
+  },
   "mapping": {
     "enabled": true,
     "mappingFileName": "Mapping.xdm",

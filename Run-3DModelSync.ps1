@@ -39,6 +39,13 @@
 .PARAMETER ReuseCockpit
     이미 떠 있는 Cockpit 이 있으면 새로 띄우지 않고 재사용한다.
 
+.PARAMETER Verify
+    마지막에 EDM 서버 등록 검증을 수행한다 (읽기 전용).
+    config 의 verify.enabled 가 true 면 이 스위치 없이도 수행한다.
+
+.PARAMETER SkipVerify
+    config 에서 켜져 있어도 이번 실행에서는 검증을 건너뛴다.
+
 .EXAMPLE
     .\Run-3DModelSync.ps1 -WhatIf
     실제 공유폴더 대상 무해 점검 (연결성/권한/변경집합 확인)
@@ -58,6 +65,9 @@
       6  다른 실행이 진행 중 (락 보유)
       7  Cockpit Import 실패 (5~6단계)
       10 예상치 못한 예외
+
+    검증(Verify)은 진단 기능이라 종료코드를 좌우하지 않는다.
+    미등록을 찾아도 경고로만 남긴다(종료코드 1).
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
@@ -67,6 +77,8 @@ param(
     [switch]$SkipImport,
     [switch]$KeepCockpitOpen,
     [switch]$ReuseCockpit,
+    [switch]$Verify,
+    [switch]$SkipVerify,
     [ValidateSet('Debug', 'Info', 'Warn', 'Error')][string]$LogLevel = 'Info'
 )
 
@@ -362,6 +374,66 @@ try {
         Write-Snapshot -Path $snapPath -SourceRoot $cfg.paths.designLibrary `
                        -Files $files -IsBaseline:$baselineOnly
         Write-Log "스냅샷 기록 완료: $snapPath" -Level Info -Step 'Step2'
+    }
+
+    # ------------------------------------------------------------ 등록 검증
+    # EDM 서버에 실제로 등록됐는지 대조한다 (읽기 전용).
+    #
+    # 이것은 '진단' 이다. 파이프라인의 성패를 좌우해서는 안 된다.
+    #   - 검증 실패(접속 불가 등)로 전체 실행을 실패로 만들지 않는다.
+    #   - 스냅샷 기록 뒤에 둔다. 검증이 죽어도 스냅샷은 이미 남아 있어야
+    #     다음 실행이 같은 변경분을 다시 Import 하지 않는다.
+    #   - 종료코드는 바꾸지 않는다. 미등록은 경고로만 남긴다.
+    $verifyEnabled = $false
+    if ($cfg.PSObject.Properties.Name -contains 'verify' -and
+        $cfg.verify.PSObject.Properties.Name -contains 'enabled') {
+        $verifyEnabled = [bool]$cfg.verify.enabled
+    }
+    if ($Verify) { $verifyEnabled = $true }
+    if ($SkipVerify -or $isDryRun) { $verifyEnabled = $false }
+
+    if ($verifyEnabled) {
+        Write-LogBanner "EDM 등록 검증 (읽기 전용)"
+        try {
+            $verifyScript = Join-Path $RepoRoot 'tools\Test-EdmRegistration.ps1'
+            if (-not (Test-Path -LiteralPath $verifyScript)) {
+                throw "검증 스크립트가 없습니다: $verifyScript"
+            }
+
+            $loginConfig = 'api_conf_lib'
+            if ($cfg.PSObject.Properties.Name -contains 'verify' -and
+                $cfg.verify.PSObject.Properties.Name -contains 'loginConfig' -and
+                $cfg.verify.loginConfig) {
+                $loginConfig = $cfg.verify.loginConfig
+            }
+
+            $verifyCsv = Join-Path $cfg.paths.outputDir `
+                         ("edm_verify_{0}.csv" -f (Get-Date -Format 'yyyy-MM-dd_HHmmss'))
+
+            & $verifyScript -LoginConfig $loginConfig `
+                            -LibraryRoot $cfg.paths.designLibrary `
+                            -OutCsv $verifyCsv | ForEach-Object {
+                Write-Log "  $_" -Level Info -Step 'Verify'
+            }
+            $vrc = $LASTEXITCODE
+            $global:LASTEXITCODE = 0    # 후속 판정 오염 방지
+
+            if ($vrc -eq 0) {
+                Write-Log "검증 완료 - 전부 정상 등록되어 있습니다." -Level Info -Step 'Verify'
+            }
+            elseif ($vrc -eq 1) {
+                Write-Log ("검증 결과 미등록 항목이 있습니다. CSV 를 확인하세요:`n" +
+                           "  $verifyCsv") -Level Warn -Step 'Verify'
+            }
+            else {
+                Write-Log ("검증을 수행하지 못했습니다 (종료코드 $vrc).`n" +
+                           "  파이프라인 자체는 정상 완료되었습니다.") -Level Warn -Step 'Verify'
+            }
+        }
+        catch {
+            # 검증 실패가 파이프라인 실패로 번지지 않게 한다.
+            Write-Log ("검증 중 오류(무시하고 계속): $($_.Exception.Message)") -Level Warn -Step 'Verify'
+        }
     }
 
     $warnCount = Get-LogWarningCount
