@@ -161,6 +161,7 @@ function Invoke-Step5Import {
         $cockpitScript = Join-Path $Step5Root 'tools\Start-Cockpit.ps1'
         $cockpit = & $cockpitScript -Reuse:$Reuse
         $cockpitPid = $cockpit.Process.Id
+        foreach ($d in @($cockpit.Diag)) { Write-Log $d -Level Warn -Step 'Step5' }
         Write-Log "Cockpit PID $cockpitPid 준비됨" -Level Info -Step 'Step5'
 
         # 2) JAB 초기화.
@@ -171,7 +172,7 @@ function Invoke-Step5Import {
 
         # 이전 실행의 결과 창이 남아 있으면 닫는다.
         # 떠 있으면 Process.MainWindowHandle 이 그쪽을 가리켜 메뉴 바를 못 찾는다.
-        $tmpMain = Get-CockpitMainWindow -ProcessId $cockpitPid
+        $tmpMain = Get-CockpitMainWindow -ProcessId $cockpitPid -WaitMs 60000
         if ($tmpMain -ne [IntPtr]::Zero) {
             if (Close-JabResultDialog -ProcessId $cockpitPid -MainHwnd $tmpMain -AppearMs 1500) {
                 Write-Log "  이전 실행의 결과 창을 닫았습니다." -Level Warn -Step 'Step5'
@@ -179,7 +180,7 @@ function Invoke-Step5Import {
         }
 
         # MainWindowHandle 은 대화상자가 뜨면 그쪽을 가리키므로 제목으로 직접 찾는다.
-        $hwnd = Get-CockpitMainWindow -ProcessId $cockpitPid
+        $hwnd = Get-CockpitMainWindow -ProcessId $cockpitPid -WaitMs 60000
         if ($hwnd -eq [IntPtr]::Zero) { throw "Cockpit 메인 창을 찾지 못했습니다." }
         Write-Log "  메인 창 = 0x$($hwnd.ToString('X'))" -Level Info -Step 'Step5'
 
@@ -196,7 +197,7 @@ function Invoke-Step5Import {
         }
         # 관문 대화상자를 넘기는 동안 Cockpit 이 메인 창을 다시 만들기도 한다.
         # 처음 잡은 핸들이 죽어 있을 수 있으므로 제목으로 다시 찾는다.
-        $hwnd = Get-CockpitMainWindow -ProcessId $cockpitPid
+        $hwnd = Get-CockpitMainWindow -ProcessId $cockpitPid -WaitMs 30000
         if ($hwnd -eq [IntPtr]::Zero) { throw "준비 후 Cockpit 메인 창을 찾지 못했습니다." }
         Write-Log "  메인 창(갱신) = 0x$($hwnd.ToString('X'))" -Level Info -Step 'Step5'
 

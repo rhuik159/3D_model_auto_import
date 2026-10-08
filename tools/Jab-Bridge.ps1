@@ -291,6 +291,8 @@ namespace Jab
 
         // 지정 프로세스의 보이는 최상위 창 목록.
         // 대화상자가 별도 창으로 뜨는지 확인할 때 쓴다.
+        // 비대화형 세션에서는 IsWindowVisible 이 항상 false 를 반환하므로
+        // 목록이 비면 WS_VISIBLE 스타일 플래그로 한 번 더 시도한다.
         public static IntPtr[] GetVisibleWindows(uint targetPid)
         {
             var list = new System.Collections.Generic.List<IntPtr>();
@@ -300,7 +302,99 @@ namespace Jab
                 if (pid == targetPid && IsWindowVisible(h)) list.Add(h);
                 return true;
             }, IntPtr.Zero);
+            if (list.Count == 0)
+            {
+                EnumWindows((h, l) => {
+                    uint pid;
+                    GetWindowThreadProcessId(h, out pid);
+                    if (pid == targetPid) {
+                        int style = GetWindowLong(h, -16);
+                        if ((style & 0x10000000) != 0) list.Add(h);
+                    }
+                    return true;
+                }, IntPtr.Zero);
+            }
             return list.ToArray();
+        }
+
+        // 비대화형 세션에서 IsWindowVisible 과 무관하게 전체 창을 열거한다.
+        public static IntPtr[] GetAllWindows(uint targetPid)
+        {
+            var list = new System.Collections.Generic.List<IntPtr>();
+            EnumWindows((h, l) => {
+                uint pid;
+                GetWindowThreadProcessId(h, out pid);
+                if (pid == targetPid) list.Add(h);
+                return true;
+            }, IntPtr.Zero);
+            return list.ToArray();
+        }
+
+        [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
+        private static extern int GetWindowLong(IntPtr hwnd, int nIndex);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool IsWindow(IntPtr hwnd);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool ScreenToClient(IntPtr hwnd, ref POINT pt);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr ChildWindowFromPointEx(IntPtr hwnd, POINT pt, uint flags);
+
+        [DllImport("wtsapi32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool WTSQuerySessionInformation(IntPtr hServer, int sessionId, int infoClass, out IntPtr buffer, out int bytes);
+
+        [DllImport("wtsapi32.dll")]
+        private static extern void WTSFreeMemory(IntPtr buffer);
+
+        // WTSConnectState: 0=Active, 4=Disconnected. 조회 실패 시 Active 로 간주한다.
+        public static bool IsSessionActive()
+        {
+            IntPtr buf; int bytes;
+            if (!WTSQuerySessionInformation(IntPtr.Zero, -1, 8, out buf, out bytes)) return true;
+            try { return Marshal.ReadInt32(buf) == 0; }
+            finally { WTSFreeMemory(buf); }
+        }
+
+        // RDP 가 끊긴 세션에서는 SendInput 이 입력 데스크톱에 닿지 않는다.
+        // Java AWT 는 마우스 진입(WM_MOUSEMOVE) 없이 온 down/up 을 무시할 수 있어 move 를 먼저 보낸다.
+        public static void PostClick(IntPtr hwnd, int screenX, int screenY)
+        {
+            const uint WM_MOUSEMOVE   = 0x0200;
+            const uint WM_LBUTTONDOWN = 0x0201;
+            const uint WM_LBUTTONUP   = 0x0202;
+            IntPtr target = hwnd;
+            var pt = new POINT { x = screenX, y = screenY };
+            ScreenToClient(hwnd, ref pt);
+            IntPtr child = ChildWindowFromPointEx(hwnd, pt, 0);
+            if (child != IntPtr.Zero && child != hwnd)
+            {
+                target = child;
+                pt = new POINT { x = screenX, y = screenY };
+                ScreenToClient(child, ref pt);
+            }
+            IntPtr lp = (IntPtr)((pt.y << 16) | (pt.x & 0xFFFF));
+            PostMessage(target, WM_MOUSEMOVE,   IntPtr.Zero,     lp);
+            System.Threading.Thread.Sleep(60);
+            PostMessage(target, WM_MOUSEMOVE,   IntPtr.Zero,     lp);
+            System.Threading.Thread.Sleep(60);
+            PostMessage(target, WM_LBUTTONDOWN, (IntPtr)0x0001, lp);
+            System.Threading.Thread.Sleep(80);
+            PostMessage(target, WM_LBUTTONUP,   IntPtr.Zero,     lp);
+        }
+
+        public static void SmartClick(IntPtr hwnd, int screenX, int screenY)
+        {
+            if (IsSessionActive()) ClickAt(screenX, screenY);
+            else PostClick(hwnd, screenX, screenY);
         }
 
         // 다른 프로세스 창은 SetForegroundWindow 만으로는 전면 전환이 거부된다.
@@ -872,7 +966,7 @@ function Click-JabElement {
 
     [Jab.Win32]::SetCursorPos($cx, $cy) | Out-Null
     Start-Sleep -Milliseconds 300
-    [Jab.Win32]::ClickAt($cx, $cy)
+    if ($Hwnd -ne [IntPtr]::Zero) { [Jab.Win32]::SmartClick($Hwnd, $cx, $cy) } else { [Jab.Win32]::ClickAt($cx, $cy) }
     [Jab.Win32]::PumpMessages(20)
 
     [PSCustomObject]@{ X = $cx; Y = $cy }
@@ -1002,7 +1096,7 @@ function Invoke-JabMenuPath {
     # 그것만으로 판정한다.
     $opened = $false
     for ($attempt = 0; $attempt -lt 3; $attempt++) {
-        [Jab.Win32]::ClickAt($tcx, $tcy)
+        [Jab.Win32]::SmartClick($Hwnd, $tcx, $tcy)
         Start-Sleep -Milliseconds 900
         [Jab.Win32]::PumpMessages(30)
 
@@ -1077,8 +1171,6 @@ function Dismiss-CockpitStartupDialog {
 
     foreach ($h in [Jab.Win32]::GetVisibleWindows([uint32]$ProcessId)) {
         if ($h -eq $MainHwnd) { continue }
-        if (-not [Jab.Bridge]::isJavaWindow($h)) { continue }
-
         $title = [Jab.Win32]::GetWindowTitle($h)
         $vm = 0; $ac = [long]0
         if (-not [Jab.Bridge]::getAccessibleContextFromHWND($h, [ref]$vm, [ref]$ac)) { continue }
@@ -1121,10 +1213,13 @@ function Dismiss-CockpitStartupDialog {
 
             # 이미 선택돼 있으면('Selected') 다시 누르지 않는다.
             if ($librarian.Name -ne 'Selected') {
-                $pt = Get-JabScreenPoint -Hwnd $h -VmId $vm -RootAc $ac `
-                                         -JabX $librarian.X -JabY $librarian.Y `
-                                         -JabW $librarian.W -JabH $librarian.H
-                [Jab.Win32]::ClickAt($pt.X, $pt.Y)
+                $libAc = $librarian.Ac; $libVm = $vm
+                $selected = {
+                    $ci0 = New-Object Jab.AccessibleContextInfo
+                    [Jab.Win32]::GetContextInfoW($libVm, $libAc, [ref]$ci0, 2000) -and $ci0.name -eq 'Selected'
+                }.GetNewClosure()
+                Invoke-JabPress -Hwnd $h -VmId $vm -RootAc $ac -TargetAc $libAc `
+                                -IsDone $selected -TimeoutMs 6000 -What 'Librarian Select' | Out-Null
                 Start-Sleep -Milliseconds 800
                 [Jab.Win32]::PumpMessages(20)
 
@@ -1171,14 +1266,13 @@ function Dismiss-CockpitStartupDialog {
                 throw "'EDM Server only' 선택지를 찾지 못했습니다."
             }
             if ($opt.States -notmatch 'checked') {
-                $oi = New-Object Jab.AccessibleContextInfo
-                [Jab.Win32]::GetContextInfoW($vm, $opt.Ac, [ref]$oi, 3000) | Out-Null
-                if ($oi.width -le 0) { throw "'EDM Server only' 좌표를 얻지 못했습니다." }
-                [Jab.Win32]::ForceForeground($h) | Out-Null
-                Start-Sleep -Milliseconds 400
-                $pt = Get-JabScreenPoint -Hwnd $h -VmId $vm -RootAc $ac `
-                                         -JabX $oi.x -JabY $oi.y -JabW $oi.width -JabH $oi.height
-                [Jab.Win32]::ClickAt($pt.X, $pt.Y)
+                $optAc = $opt.Ac; $optVm = $vm
+                $checked = {
+                    $ci0 = New-Object Jab.AccessibleContextInfo
+                    [Jab.Win32]::GetContextInfoW($optVm, $optAc, [ref]$ci0, 2000) -and $ci0.states_en_US -match 'checked'
+                }.GetNewClosure()
+                Invoke-JabPress -Hwnd $h -VmId $vm -RootAc $ac -TargetAc $optAc `
+                                -IsDone $checked -TimeoutMs 6000 -What 'EDM Server only' | Out-Null
                 Start-Sleep -Milliseconds 600
                 [Jab.Win32]::PumpMessages(20)
             }
@@ -1245,6 +1339,73 @@ function Get-JabScreenPoint {
     }
 }
 
+function Invoke-JabPress {
+    <#
+    .SYNOPSIS
+        버튼류를 누르고 IsDone 이 참이 될 때까지 기다린다 (내부 헬퍼).
+
+    .DESCRIPTION
+        세션이 연결돼 있으면 실제 마우스 클릭(ClickAt) 한 가지만 쓴다.
+        RDP 가 끊긴 세션에서는 실제 입력이 닿지 않고, AWT 가 커서 위치(GetMessagePos)로
+        마우스 진입을 판정해서 PostMessage 클릭도 무시될 수 있다.
+        그래서 JAB 액션(doClick) → PostMessage 순으로 시도하고 결과로 검증한다.
+        IsDone 은 호출 측 변수를 쓰므로 GetNewClosure() 로 만들어 넘길 것.
+    #>
+    param(
+        [Parameter(Mandatory)][IntPtr]$Hwnd,
+        [Parameter(Mandatory)][int]$VmId,
+        [Parameter(Mandatory)][long]$RootAc,
+        [Parameter(Mandatory)][long]$TargetAc,
+        [Parameter(Mandatory)][scriptblock]$IsDone,
+        [int]$TimeoutMs = 20000,
+        [string]$What = '버튼'
+    )
+    $ti = New-Object Jab.AccessibleContextInfo
+    [Jab.Win32]::GetContextInfoW($VmId, $TargetAc, [ref]$ti, 3000) | Out-Null
+    $pt = $null
+    if ($ti.width -gt 0) {
+        $pt = Get-JabScreenPoint -Hwnd $Hwnd -VmId $VmId -RootAc $RootAc `
+                                 -JabX $ti.x -JabY $ti.y -JabW $ti.width -JabH $ti.height
+    }
+
+    $methods = @(if ([Jab.Win32]::IsSessionActive()) { 'mouse' } else { 'action', 'post' })
+    $perMs = [int]($TimeoutMs / $methods.Count)
+
+    foreach ($m in $methods) {
+        try {
+            switch ($m) {
+                'mouse' {
+                    if ($null -eq $pt) { throw "$What 좌표를 얻지 못했습니다." }
+                    [Jab.Win32]::ClickAt($pt.X, $pt.Y)
+                }
+                'action' {
+                    $acts = @([Jab.Win32]::GetActionsW($VmId, $TargetAc, 3000))
+                    Write-Log "  [$What] JAB 액션 시도 (사용 가능: $($acts -join ', '))"
+                    Invoke-JabAction -Ac $TargetAc -VmId $VmId | Out-Null
+                }
+                'post' {
+                    if ($null -eq $pt) { throw "$What 좌표를 얻지 못했습니다." }
+                    Write-Log "  [$What] PostMessage 클릭 시도"
+                    [Jab.Win32]::PostClick($Hwnd, $pt.X, $pt.Y)
+                }
+            }
+        } catch {
+            Write-Log "  [$What] '$m' 방식 실패: $($_.Exception.Message)"
+            continue
+        }
+        $deadline = (Get-Date).AddMilliseconds($perMs)
+        while ((Get-Date) -lt $deadline) {
+            Start-Sleep -Milliseconds 400
+            [Jab.Win32]::PumpMessages(20)
+            if (& $IsDone) {
+                if ($m -ne 'mouse') { Write-Log "  [$What] '$m' 방식으로 성공" }
+                return $true
+            }
+        }
+    }
+    return $false
+}
+
 function _ClickDialogButton {
     <#
     .SYNOPSIS
@@ -1269,20 +1430,11 @@ function _ClickDialogButton {
     Start-Sleep -Milliseconds 500
     [Jab.Win32]::PumpMessages(20)
 
-    $bi = New-Object Jab.AccessibleContextInfo
-    [Jab.Win32]::GetContextInfoW($VmId, $btn.Ac, [ref]$bi, 3000) | Out-Null
-    if ($bi.width -le 0) { throw "대화상자 버튼 좌표를 얻지 못했습니다." }
-
-    # 디스플레이 배율 때문에 JAB 좌표를 그대로 쓰면 빗나간다. 창 기준으로 보정한다.
-    $pt = Get-JabScreenPoint -Hwnd $Hwnd -VmId $VmId -RootAc $Ac `
-                             -JabX $bi.x -JabY $bi.y -JabW $bi.width -JabH $bi.height
-    [Jab.Win32]::ClickAt($pt.X, $pt.Y)
-
-    $deadline = (Get-Date).AddMilliseconds($TimeoutMs)
-    while ((Get-Date) -lt $deadline) {
-        Start-Sleep -Milliseconds 400
-        [Jab.Win32]::PumpMessages(20)
-        if (-not [Jab.Win32]::IsWindowVisible($Hwnd)) { return $true }
+    $dlgHwnd = $Hwnd
+    $closed = { -not [Jab.Win32]::IsWindow($dlgHwnd) -or -not [Jab.Win32]::IsWindowVisible($dlgHwnd) }.GetNewClosure()
+    if (Invoke-JabPress -Hwnd $Hwnd -VmId $VmId -RootAc $Ac -TargetAc $btn.Ac `
+                        -IsDone $closed -TimeoutMs $TimeoutMs -What "'$($btn.Name)' 버튼") {
+        return $true
     }
     throw "버튼을 눌렀지만 대화상자가 닫히지 않았습니다."
 }
@@ -1337,7 +1489,7 @@ function Wait-CockpitReady {
                     Start-Sleep -Milliseconds 1500
                 }
             } catch {
-                Write-Verbose "기동 대화상자 처리 실패(재시도): $($_.Exception.Message)"
+                Write-Log "기동 대화상자 처리 실패(재시도): $($_.Exception.Message)"
             }
         }
 
@@ -1377,14 +1529,28 @@ function Get-CockpitMainWindow {
     #>
     param(
         [Parameter(Mandatory)][int]$ProcessId,
-        [string]$TitlePattern = 'Xpedition EDM Library Cockpit'
+        [string]$TitlePattern = 'Xpedition EDM Library Cockpit',
+        [int]$WaitMs = 0
     )
-    foreach ($h in [Jab.Win32]::GetVisibleWindows([uint32]$ProcessId)) {
-        if ([Jab.Win32]::GetWindowTitle($h) -eq $TitlePattern) { return $h }
+    $deadline = (Get-Date).AddMilliseconds([Math]::Max($WaitMs, 1))
+    if (-not (Get-Variable -Name SessionStateLogged -Scope Script -ErrorAction SilentlyContinue)) {
+        $script:SessionStateLogged = $true
+        $state = if ([Jab.Win32]::IsSessionActive()) { 'Active(SendInput 클릭)' } else { 'Disconnected(PostMessage 클릭)' }
+        Write-Log "세션 상태: $state"
     }
-    # 정확히 일치하는 게 없으면 부분 일치로 한 번 더
-    foreach ($h in [Jab.Win32]::GetVisibleWindows([uint32]$ProcessId)) {
-        if ([Jab.Win32]::GetWindowTitle($h) -like "*$TitlePattern*") { return $h }
+    do {
+        $allWindows = [Jab.Win32]::GetAllWindows([uint32]$ProcessId)
+        foreach ($h in $allWindows) {
+            if ([Jab.Win32]::GetWindowTitle($h) -eq $TitlePattern) { return $h }
+        }
+        foreach ($h in $allWindows) {
+            if ([Jab.Win32]::GetWindowTitle($h) -like "*$TitlePattern*") { return $h }
+        }
+        if ((Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 1000 }
+    } while ((Get-Date) -lt $deadline)
+    if ($WaitMs -gt 0) {
+        $list = @([Jab.Win32]::GetAllWindows([uint32]$ProcessId) | ForEach-Object { "'$([Jab.Win32]::GetWindowTitle($_))'" }) -join ', '
+        Write-Log "메인 창 대기 시간 초과 (${WaitMs}ms). 현재 창: $list"
     }
     return [IntPtr]::Zero
 }
@@ -1423,7 +1589,6 @@ function Close-JabResultDialog {
         [Jab.Win32]::PumpMessages(20)
         foreach ($h in [Jab.Win32]::GetVisibleWindows([uint32]$ProcessId)) {
             if ($h -eq $MainHwnd) { continue }
-            if (-not [Jab.Bridge]::isJavaWindow($h)) { continue }
             $vm = 0; $ac = [long]0
             if (-not [Jab.Bridge]::getAccessibleContextFromHWND($h, [ref]$vm, [ref]$ac)) { continue }
             if ($ac -eq 0) { continue }
@@ -1464,19 +1629,11 @@ function Close-JabResultDialog {
     [Jab.Win32]::ForceForeground($target.Hwnd) | Out-Null
     Start-Sleep -Milliseconds 400
 
-    $bi = New-Object Jab.AccessibleContextInfo
-    [Jab.Win32]::GetContextInfoW($target.VmId, $btn.Ac, [ref]$bi, 3000) | Out-Null
-    if ($bi.width -le 0) { throw "결과 창 버튼 좌표를 얻지 못했습니다." }
-
-    $bp = Get-JabScreenPoint -Hwnd $target.Hwnd -VmId $target.VmId -RootAc $target.Ac `
-                             -JabX $bi.x -JabY $bi.y -JabW $bi.width -JabH $bi.height
-    [Jab.Win32]::ClickAt($bp.X, $bp.Y)
-
-    $deadline2 = (Get-Date).AddMilliseconds($TimeoutMs)
-    while ((Get-Date) -lt $deadline2) {
-        Start-Sleep -Milliseconds 400
-        [Jab.Win32]::PumpMessages(20)
-        if (-not [Jab.Win32]::IsWindowVisible($target.Hwnd)) { return $true }
+    $resHwnd = $target.Hwnd
+    $closed = { -not [Jab.Win32]::IsWindow($resHwnd) -or -not [Jab.Win32]::IsWindowVisible($resHwnd) }.GetNewClosure()
+    if (Invoke-JabPress -Hwnd $target.Hwnd -VmId $target.VmId -RootAc $target.Ac -TargetAc $btn.Ac `
+                        -IsDone $closed -TimeoutMs $TimeoutMs -What "결과 창 '$($btn.Name)'") {
+        return $true
     }
     throw "결과 창을 닫지 못했습니다."
 }
@@ -1501,7 +1658,6 @@ function Wait-JabDialog {
         [Jab.Win32]::PumpMessages(30)
         foreach ($h in [Jab.Win32]::GetVisibleWindows([uint32]$ProcessId)) {
             if ($h -eq $MainHwnd) { continue }
-            if (-not [Jab.Bridge]::isJavaWindow($h)) { continue }
             $vm = 0; $ac = [long]0
             if (-not [Jab.Bridge]::getAccessibleContextFromHWND($h, [ref]$vm, [ref]$ac)) { continue }
             if ($ac -eq 0) { continue }
@@ -1561,7 +1717,7 @@ function Do-JabFileDialog {
         # 포커스를 줘야 입력이 반영되는 경우가 있다 (배율 보정 적용)
         $fp = Get-JabScreenPoint -Hwnd $Dialog.Hwnd -VmId $Dialog.VmId -RootAc $Dialog.Ac `
                                  -JabX $fi.x -JabY $fi.y -JabW $fi.width -JabH $fi.height
-        [Jab.Win32]::ClickAt($fp.X, $fp.Y)
+        [Jab.Win32]::SmartClick($Dialog.Hwnd, $fp.X, $fp.Y)
         Start-Sleep -Milliseconds 300
         [Jab.Win32]::PumpMessages(20)
     }
@@ -1585,7 +1741,7 @@ function Do-JabFileDialog {
     if ($bi.width -le 0) { throw "확인 버튼 좌표를 얻지 못했습니다." }
     $bp = Get-JabScreenPoint -Hwnd $Dialog.Hwnd -VmId $Dialog.VmId -RootAc $Dialog.Ac `
                              -JabX $bi.x -JabY $bi.y -JabW $bi.width -JabH $bi.height
-    [Jab.Win32]::ClickAt($bp.X, $bp.Y)
+    [Jab.Win32]::SmartClick($Dialog.Hwnd, $bp.X, $bp.Y)
 
     # 3) 닫혔는지 관찰로 검증 (반환값은 믿지 않는다)
     $deadline = (Get-Date).AddMilliseconds($TimeoutMs)
@@ -1647,7 +1803,7 @@ function Do-JabMappingDialog {
         param($f, [string]$Value)
         $fp = Get-JabScreenPoint -Hwnd $Dialog.Hwnd -VmId $Dialog.VmId -RootAc $Dialog.Ac `
                                  -JabX $f.X -JabY $f.Y -JabW $f.W -JabH $f.H
-        [Jab.Win32]::ClickAt($fp.X, $fp.Y)
+        [Jab.Win32]::SmartClick($Dialog.Hwnd, $fp.X, $fp.Y)
         Start-Sleep -Milliseconds 300
         [Jab.Win32]::PumpMessages(20)
         if (-not [Jab.Bridge]::setTextContents($Dialog.VmId, $f.Ac, $Value)) {
@@ -1670,7 +1826,7 @@ function Do-JabMappingDialog {
     if ($bi.width -le 0) { throw "Import 버튼 좌표를 얻지 못했습니다." }
     $bp = Get-JabScreenPoint -Hwnd $Dialog.Hwnd -VmId $Dialog.VmId -RootAc $Dialog.Ac `
                              -JabX $bi.x -JabY $bi.y -JabW $bi.width -JabH $bi.height
-    [Jab.Win32]::ClickAt($bp.X, $bp.Y)
+    [Jab.Win32]::SmartClick($Dialog.Hwnd, $bp.X, $bp.Y)
 
     # 닫힘을 관찰로 검증
     $deadline = (Get-Date).AddMilliseconds($TimeoutMs)

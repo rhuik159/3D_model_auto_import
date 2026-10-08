@@ -48,6 +48,15 @@ tools\Test-JabRaw.ps1              JAB 저수준 점검
 docs\                              문서
 ```
 
+### RDP 를 닫은 상태로 운영하려면
+
+```
+IddSampleDriver\                   가상 디스플레이 드라이버 (1회 설치)
+tools\Move-SessionToConsole.bat    RDP 끊김 시 세션을 콘솔로 넘김 (스케줄러 등록)
+tools\Disconnect-ToConsole.bat     수동 콘솔 전환
+```
+설치·등록 방법은 [UNATTENDED-RDP.md](UNATTENDED-RDP.md) 참고.
+
 ---
 
 ## 2. 스케줄러에 등록할 파일

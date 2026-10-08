@@ -62,6 +62,43 @@ function Write-Step {
         default { 'Gray' }
     }
     Write-Host ("[{0:HH:mm:ss}] {1}" -f (Get-Date), $Message) -ForegroundColor $color
+    if ($Level -eq 'Warn') { $script:Diag.Add($Message) }
+}
+# 호출자(Step5)가 파이프라인 로그에 남기도록 경고 메시지를 모아 반환한다.
+$script:Diag = New-Object System.Collections.Generic.List[string]
+
+# Process.MainWindowHandle 은 RDP 가 끊긴 세션에서 0 으로 보이므로 EnumWindows 로 직접 창 제목을 읽는다.
+if (-not ('CockpitWin' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class CockpitWin {
+    private delegate bool EnumProc(IntPtr h, IntPtr l);
+    [DllImport("user32.dll")] private static extern bool EnumWindows(EnumProc cb, IntPtr l);
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr h, StringBuilder sb, int max);
+    public static string[] Titles(uint targetPid) {
+        var list = new List<string>();
+        EnumWindows((h, l) => {
+            uint pid; GetWindowThreadProcessId(h, out pid);
+            if (pid == targetPid) {
+                var sb = new StringBuilder(512);
+                GetWindowText(h, sb, 512);
+                if (sb.Length > 0) list.Add(sb.ToString());
+            }
+            return true;
+        }, IntPtr.Zero);
+        return list.ToArray();
+    }
+}
+'@
+}
+
+function Test-CockpitWindow {
+    param([int]$ProcessId)
+    @([CockpitWin]::Titles([uint32]$ProcessId) | Where-Object { $_ -like '*Xpedition EDM Library Cockpit*' }).Count -gt 0
 }
 
 # ---------------------------------------------------------------- 사전 점검
@@ -81,7 +118,7 @@ Write-Step ("  " + ($configLine -replace '\s+', ' ').Trim()) -Level Ok
 
 # ------------------------------------------------------- 기존 인스턴스 확인
 $existing = @(Get-Process -Name 'xDMLibraryClient' -ErrorAction SilentlyContinue |
-    Where-Object { $_.MainWindowHandle -ne 0 })
+    Where-Object { Test-CockpitWindow -ProcessId $_.Id })
 
 if ($existing.Count -gt 0) {
     if ($Reuse) {
@@ -92,6 +129,7 @@ if ($existing.Count -gt 0) {
             MainWindowHandle = $p.MainWindowHandle
             MainWindowTitle  = $p.MainWindowTitle
             Reused           = $true
+            Diag             = @($script:Diag)
         }
     }
     Write-Step "이미 $($existing.Count) 개의 Cockpit 이 떠 있습니다. 새로 하나 더 띄웁니다." -Level Warn
@@ -115,39 +153,41 @@ Write-Step "창이 뜨기를 기다립니다 (최대 ${TimeoutSeconds}초)..."
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 $target = $null
 
+# 새 xDMLibraryClient 가 둘 이상 생길 수 있다(창 없는 프로세스가 먼저 잡혀 실패한 적 있음).
+# Cockpit 메인 창을 실제로 가진 프로세스를 고른다.
+$now = @()
 while ((Get-Date) -lt $deadline) {
     Start-Sleep -Milliseconds 1000
     $now = @(Get-Process -Name 'xDMLibraryClient' -ErrorAction SilentlyContinue |
-        Where-Object { $before -notcontains $_.Id -and $_.MainWindowHandle -ne 0 })
-    if ($now.Count -gt 0) {
-        $target = $now[0]
+        Where-Object { $before -notcontains $_.Id })
+    $withWin = @($now | Where-Object { Test-CockpitWindow -ProcessId $_.Id })
+    if ($withWin.Count -gt 0) {
+        $target = $withWin[0]
         break
     }
 }
 
-if (-not $target) {
-    $anyNew = @(Get-Process -Name 'xDMLibraryClient' -ErrorAction SilentlyContinue |
-        Where-Object { $before -notcontains $_.Id })
-    if ($anyNew.Count -gt 0) {
-        throw ("프로세스는 떴으나 ${TimeoutSeconds}초 안에 창이 나타나지 않았습니다 " +
-               "(PID $($anyNew[0].Id)). 로그인 대화상자에서 멈춰 있을 수 있습니다. " +
-               "설정에 -ds -dslicense -dsprodlib 가 적용됐는지 확인하세요.")
+if ($now.Count -gt 1 -or -not $target) {
+    Write-Step "새 xDMLibraryClient 프로세스 $($now.Count) 개:" -Level Warn
+    foreach ($p in $now) {
+        $titles = @([CockpitWin]::Titles([uint32]$p.Id)) -join ' | '
+        $parent = (Get-CimInstance Win32_Process -Filter "ProcessId=$($p.Id)" -ErrorAction SilentlyContinue).ParentProcessId
+        Write-Step "  PID $($p.Id) (부모 $parent, 시작 $($p.StartTime.ToString('HH:mm:ss'))) 창: $titles" -Level Warn
     }
-    throw "Cockpit 이 기동되지 않았습니다. dmsdesktop.bat 을 수동 실행해 오류를 확인하세요."
 }
 
-# 창 제목이 채워질 때까지 잠시 더 기다린다 (플러그인 로드 완료 신호)
-$titleDeadline = (Get-Date).AddSeconds(30)
-while ((Get-Date) -lt $titleDeadline -and [string]::IsNullOrWhiteSpace($target.MainWindowTitle)) {
-    Start-Sleep -Milliseconds 500
-    $target.Refresh()
+if (-not $target) {
+    throw ("Cockpit 창이 나타나지 않았습니다 (${TimeoutSeconds}초). 남아 있는 xDMLibraryClient/javaw 프로세스를 정리한 뒤 다시 실행하세요.`n  " +
+           ($script:Diag -join "`n  "))
 }
 
-Write-Step "기동 완료: PID $($target.Id) / '$($target.MainWindowTitle)'" -Level Ok
+$target.Refresh()
+Write-Step "기동 완료: PID $($target.Id) / 창: $(@([CockpitWin]::Titles([uint32]$target.Id)) -join ' | ')" -Level Ok
 
 [PSCustomObject]@{
     Process          = $target
     MainWindowHandle = $target.MainWindowHandle
     MainWindowTitle  = $target.MainWindowTitle
     Reused           = $false
+    Diag             = @($script:Diag)
 }
