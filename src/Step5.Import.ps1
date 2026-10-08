@@ -172,9 +172,12 @@ function Invoke-Step5Import {
 
         # 이전 실행의 결과 창이 남아 있으면 닫는다.
         # 떠 있으면 Process.MainWindowHandle 이 그쪽을 가리켜 메뉴 바를 못 찾는다.
+        # 이 시점엔 기동 대화상자(License Selector 등)가 떠 있을 수 있으므로
+        # 제목으로 걸러야 한다. 안 거르면 그걸 결과 창으로 잡고 10분간 멈춘다.
         $tmpMain = Get-CockpitMainWindow -ProcessId $cockpitPid -WaitMs 60000
         if ($tmpMain -ne [IntPtr]::Zero) {
-            if (Close-JabResultDialog -ProcessId $cockpitPid -MainHwnd $tmpMain -AppearMs 1500) {
+            if (Close-JabResultDialog -ProcessId $cockpitPid -MainHwnd $tmpMain -AppearMs 1500 `
+                                      -TitlePatterns @('*finished*', 'Importing Mapping File')) {
                 Write-Log "  이전 실행의 결과 창을 닫았습니다." -Level Warn -Step 'Step5'
             }
         }

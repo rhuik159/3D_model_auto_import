@@ -1569,6 +1569,12 @@ function Close-JabResultDialog {
         결과 창이 나타날 때까지 기다리는 시간. 메뉴 실행 직후에는 아직 창이
         없을 수 있어서, 바로 훑으면 '없음'으로 오판하고 넘어가 버린다.
 
+    .PARAMETER TitlePatterns
+        결과 창으로 인정할 창 제목(-like 패턴). 비우면 메인 창이 아닌 아무 창이나
+        잡는다. 기동 직후에 부를 때는 반드시 지정할 것 - License Selector 같은
+        기동 대화상자를 결과 창으로 오인해 버튼 활성화를 10분간 기다리게 된다
+        (고객 장비에서 실제로 겪음).
+
     .OUTPUTS
         닫았으면 $true, 제한 시간 안에 결과 창이 나타나지 않았으면 $false.
     #>
@@ -1578,7 +1584,8 @@ function Close-JabResultDialog {
         [int]$TimeoutMs = 20000,
         [int]$WaitFinishMs = 600000,
         [int]$AppearMs = 15000,
-        [string[]]$ButtonLabels = @('Close','OK','확인','닫기')
+        [string[]]$ButtonLabels = @('Close','OK','확인','닫기'),
+        [string[]]$TitlePatterns = @()
     )
     _AssertInit
 
@@ -1589,16 +1596,19 @@ function Close-JabResultDialog {
         [Jab.Win32]::PumpMessages(20)
         foreach ($h in [Jab.Win32]::GetVisibleWindows([uint32]$ProcessId)) {
             if ($h -eq $MainHwnd) { continue }
+            $title = [Jab.Win32]::GetWindowTitle($h)
+            if ($TitlePatterns.Count -gt 0 -and -not ($TitlePatterns | Where-Object { $title -like $_ })) { continue }
             $vm = 0; $ac = [long]0
             if (-not [Jab.Bridge]::getAccessibleContextFromHWND($h, [ref]$vm, [ref]$ac)) { continue }
             if ($ac -eq 0) { continue }
-            $target = [PSCustomObject]@{ Hwnd = $h; VmId = $vm; Ac = $ac }
+            $target = [PSCustomObject]@{ Hwnd = $h; VmId = $vm; Ac = $ac; Title = $title }
             break
         }
         if ($null -ne $target) { break }
         Start-Sleep -Milliseconds 500
     }
     if ($null -eq $target) { return $false }
+    Write-Log "결과 창 감지: '$($target.Title)'"
 
     # 2) 버튼 라벨은 창마다 다르다.
     #    Bulk Import  → 'Bulk Import finished'   / Close
