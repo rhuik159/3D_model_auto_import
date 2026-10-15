@@ -1169,12 +1169,28 @@ function Dismiss-CockpitStartupDialog {
     )
     _AssertInit
 
-    foreach ($h in [Jab.Win32]::GetVisibleWindows([uint32]$ProcessId)) {
+    # Task Scheduler 비대화형 세션에서 IsWindowVisible()이 항상 false를 반환하므로
+    # GetAllWindows로 전체 창을 열거한다.
+    foreach ($h in [Jab.Win32]::GetAllWindows([uint32]$ProcessId)) {
         if ($h -eq $MainHwnd) { continue }
         $title = [Jab.Win32]::GetWindowTitle($h)
+        if (-not $title) { continue }
         $vm = 0; $ac = [long]0
         if (-not [Jab.Bridge]::getAccessibleContextFromHWND($h, [ref]$vm, [ref]$ac)) { continue }
         if ($ac -eq 0) { continue }
+
+        # --- 'Could not get DMSInstance reference object.' 같은 Cockpit 에러 창 ---
+        # 기동 직후 EDM 서버 연결 실패 시 뜬다. OK 를 눌러 닫지 않으면
+        # 메뉴 바가 영원히 나타나지 않는다.
+        if ($title -eq 'Error') {
+            Write-Verbose "Cockpit Error 창 처리 중: '$title'"
+            $dismissed = (_ClickDialogButton -Hwnd $h -VmId $vm -Ac $ac `
+                                             -Labels @('OK','확인') -TimeoutMs $TimeoutMs)
+            if ($dismissed) {
+                Write-Log "Cockpit 에러 창을 닫았습니다 (OK). 서버 연결 상태를 확인하세요." -Level Warn
+                return $true
+            }
+        }
 
         # --- License Selector : Librarian 열 선택 후 OK ---
         if ($title -like '*License Selector*') {
@@ -1594,7 +1610,7 @@ function Close-JabResultDialog {
     $appearDeadline = (Get-Date).AddMilliseconds($AppearMs)
     while ((Get-Date) -lt $appearDeadline) {
         [Jab.Win32]::PumpMessages(20)
-        foreach ($h in [Jab.Win32]::GetVisibleWindows([uint32]$ProcessId)) {
+        foreach ($h in [Jab.Win32]::GetAllWindows([uint32]$ProcessId)) {
             if ($h -eq $MainHwnd) { continue }
             $title = [Jab.Win32]::GetWindowTitle($h)
             if ($TitlePatterns.Count -gt 0 -and -not ($TitlePatterns | Where-Object { $title -like $_ })) { continue }
@@ -1666,7 +1682,7 @@ function Wait-JabDialog {
     $deadline = (Get-Date).AddMilliseconds($TimeoutMs)
     while ((Get-Date) -lt $deadline) {
         [Jab.Win32]::PumpMessages(30)
-        foreach ($h in [Jab.Win32]::GetVisibleWindows([uint32]$ProcessId)) {
+        foreach ($h in [Jab.Win32]::GetAllWindows([uint32]$ProcessId)) {
             if ($h -eq $MainHwnd) { continue }
             $vm = 0; $ac = [long]0
             if (-not [Jab.Bridge]::getAccessibleContextFromHWND($h, [ref]$vm, [ref]$ac)) { continue }

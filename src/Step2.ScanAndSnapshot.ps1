@@ -227,6 +227,13 @@ function Compare-WithSnapshot {
     $hashFailed = 0
     $seenKeys = @{}
 
+    # 스냅샷이 없으면(최초 실행) 전체가 해시 대상이므로 사전에 총 건수를 알 수 있다.
+    # 스냅샷이 있으면 루프를 돌기 전에는 알 수 없어 -1(미정) 로 둔다.
+    $totalToHash = if ($prev.Count -eq 0) { $CurrentFiles.Count } else { -1 }
+    if ($totalToHash -gt 0) {
+        Write-Log "해시 계산 시작: $totalToHash 건 (네트워크 공유 경유 시 시간이 걸릴 수 있습니다)" -Level Info -Step 'Step2'
+    }
+
     foreach ($f in $CurrentFiles) {
         $seenKeys[$f.Key] = $true
         $old = if ($prev.ContainsKey($f.Key)) { $prev[$f.Key] } else { $null }
@@ -252,6 +259,12 @@ function Compare-WithSnapshot {
             try {
                 $f.Sha256 = Get-FileSha -Path $f.AccessPath -Algorithm $HashAlgorithm
                 $hashed++
+                # 해시 계산 중 진행 상황 — 10건마다 또는 단건
+                $total = if ($totalToHash -gt 0) { $totalToHash } else { '?' }
+                $logInterval = if ($totalToHash -ge 10) { 10 } else { 1 }
+                if ($hashed % $logInterval -eq 0 -or $hashed -eq $totalToHash) {
+                    Write-Log "  해시 진행: $hashed / $total 건 ($($f.RelativePath))" -Level Info -Step 'Step2'
+                }
             }
             catch {
                 # 해시 실패 파일을 조용히 빠뜨리면 변경 감지가 무력해진다.
