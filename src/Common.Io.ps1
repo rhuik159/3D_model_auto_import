@@ -111,19 +111,28 @@ function Get-FileSha {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$Path,
-        [string]$Algorithm = 'SHA256'
+        [string]$Algorithm = 'SHA256',
+        # 외부에서 재사용할 HashAlgorithm 객체를 주입하면 파일마다 생성하지 않는다.
+        # 주입 시 호출자가 Dispose 를 책임진다.
+        [System.Security.Cryptography.HashAlgorithm]$AlgoInstance = $null
     )
 
-    $algo = [System.Security.Cryptography.HashAlgorithm]::Create($Algorithm)
-    if (-not $algo) { throw "지원하지 않는 해시 알고리즘입니다: $Algorithm" }
+    $ownsAlgo = $false
+    if ($null -eq $AlgoInstance) {
+        $AlgoInstance = [System.Security.Cryptography.HashAlgorithm]::Create($Algorithm)
+        if (-not $AlgoInstance) { throw "지원하지 않는 해시 알고리즘입니다: $Algorithm" }
+        $ownsAlgo = $true
+    }
     try {
-        $stream = [System.IO.File]::Open(
+        # bufferSize 128KB: 기본 4KB 버퍼로 MB급 파일을 읽으면 시스템콜이 수백 번 발생한다.
+        $stream = New-Object System.IO.FileStream(
             $Path,
             [System.IO.FileMode]::Open,
             [System.IO.FileAccess]::Read,
-            [System.IO.FileShare]::ReadWrite)
+            [System.IO.FileShare]::ReadWrite,
+            131072)
         try {
-            $bytes = $algo.ComputeHash($stream)
+            $bytes = $AlgoInstance.ComputeHash($stream)
         }
         finally {
             $stream.Dispose()
@@ -131,7 +140,7 @@ function Get-FileSha {
         return [System.BitConverter]::ToString($bytes).Replace('-', '')
     }
     finally {
-        $algo.Dispose()
+        if ($ownsAlgo) { $AlgoInstance.Dispose() }
     }
 }
 

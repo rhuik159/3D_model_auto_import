@@ -4,6 +4,60 @@ Set-StrictMode -Version Latest
 
 <#
 .SYNOPSIS
+    원본 공유폴더를 스캔해 {스냅샷키 → 파일크기} hashtable 을 반환한다.
+.DESCRIPTION
+    Get-LibraryFiles 와 달리 PSCustomObject 를 만들지 않아 메모리 사용이 극히 적다.
+    삭제 감지(키 존재 여부)와 최초 실행 크기 비교에만 쓰이므로 키·크기만 보존한다.
+#>
+function Get-SourceFileMap {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Root,
+        [Parameter(Mandatory)][string[]]$IncludeExtensions,
+        [string[]]$ExcludeFolderNames = @()
+    )
+
+    $extSet = @{}
+    foreach ($e in $IncludeExtensions) { $extSet[$e.ToLowerInvariant()] = $true }
+
+    $rootFull   = [System.IO.Path]::GetFullPath($Root).TrimEnd('\')
+    $rootPrefix = $rootFull + '\'
+    $map        = @{}
+    $skipped    = 0
+
+    try {
+        $enum = [System.IO.Directory]::EnumerateFiles(
+            $rootFull, '*', [System.IO.SearchOption]::TopDirectoryOnly)
+    }
+    catch {
+        throw "원본 폴더를 열거할 수 없습니다: $rootFull`n  $($_.Exception.Message)"
+    }
+
+    foreach ($full in $enum) {
+        try {
+            $ext = [System.IO.Path]::GetExtension($full).ToLowerInvariant()
+            if (-not $extSet.ContainsKey($ext)) { continue }
+
+            $rel    = $full.Substring($rootPrefix.Length)
+            $key    = ConvertTo-SnapshotKey $rel
+            $access = ConvertTo-ExtendedPath $full
+            $size   = (New-Object System.IO.FileInfo($access)).Length
+            $map[$key] = $size
+        }
+        catch {
+            $skipped++
+            Write-Log "원본 파일 접근 실패(건너뜀): $full - $($_.Exception.Message)" -Level Warn -Step 'Step2'
+        }
+    }
+
+    if ($skipped -gt 0) {
+        Write-Log "원본 접근 실패로 건너뛴 파일: $skipped 건" -Level Warn -Step 'Step2'
+    }
+    return $map
+}
+
+<#
+.SYNOPSIS
     설계팀 라이브러리를 스캔해 파일 목록을 만든다 (해시는 이후 단계에서).
 .DESCRIPTION
     - EnumerateFiles: 스트리밍이라 대용량에서 메모리 부담이 적고
@@ -30,8 +84,9 @@ function Get-LibraryFiles {
     $skipped    = 0
 
     try {
+        # TopDirectoryOnly: 지정 폴더 바로 아래 파일만 열거, 하위폴더 제외
         $enum = [System.IO.Directory]::EnumerateFiles(
-            $rootFull, '*', [System.IO.SearchOption]::AllDirectories)
+            $rootFull, '*', [System.IO.SearchOption]::TopDirectoryOnly)
     }
     catch {
         throw "라이브러리 폴더를 열거할 수 없습니다: $rootFull`n  $($_.Exception.Message)"
@@ -43,23 +98,13 @@ function Get-LibraryFiles {
             if (-not $extSet.ContainsKey($ext)) { continue }
 
             $rel = $full.Substring($rootPrefix.Length)
-
-            # 제외 폴더 검사 (마지막 요소는 파일명이므로 제외)
             $parts = $rel.Split('\')
-            $excluded = $false
-            for ($i = 0; $i -lt $parts.Length - 1; $i++) {
-                if ($excludeSet.ContainsKey($parts[$i].ToLowerInvariant())) {
-                    $excluded = $true
-                    break
-                }
-            }
-            if ($excluded) { continue }
 
             # 260자 초과 대비 확장 접두사
             $access = ConvertTo-ExtendedPath $full
             $fi = New-Object System.IO.FileInfo($access)
 
-            $category = if ($parts.Length -gt 1) { $parts[0] } else { '(root)' }
+            $category = '(root)'
 
             $results.Add([pscustomobject]@{
                 RelativePath     = $rel
@@ -216,7 +261,8 @@ function Compare-WithSnapshot {
         [Parameter(Mandatory)][string]$HashAlgorithm,
         [int]$MaxFileSizeMB = 0,
         [switch]$ForceRehash,
-        # 원본 공유폴더의 키 집합(hashtable). 삭제 판정 기준.
+        # 원본 공유폴더의 {key → size} hashtable (Get-SourceFileMap 반환값).
+        # 삭제 판정 기준 및 최초 실행 크기 비교에 사용.
         [Parameter()]$SourceKeys
     )
 
@@ -233,6 +279,10 @@ function Compare-WithSnapshot {
     if ($totalToHash -gt 0) {
         Write-Log "해시 계산 시작: $totalToHash 건 (네트워크 공유 경유 시 시간이 걸릴 수 있습니다)" -Level Info -Step 'Step2'
     }
+
+    # HashAlgorithm 객체를 루프 밖에서 한 번만 생성해 재사용한다.
+    # 파일마다 Create() 를 호출하면 리플렉션 초기화 오버헤드가 누적되어 후반부가 급격히 느려진다.
+    $algoInstance = [System.Security.Cryptography.HashAlgorithm]::Create($HashAlgorithm)
 
     foreach ($f in $CurrentFiles) {
         $seenKeys[$f.Key] = $true
@@ -257,11 +307,11 @@ function Compare-WithSnapshot {
         }
         else {
             try {
-                $f.Sha256 = Get-FileSha -Path $f.AccessPath -Algorithm $HashAlgorithm
+                $f.Sha256 = Get-FileSha -Path $f.AccessPath -AlgoInstance $algoInstance
                 $hashed++
-                # 해시 계산 중 진행 상황 — 10건마다 또는 단건
+                # 해시 계산 중 진행 상황 — 100건마다 (빈도가 높으면 StreamWriter 생성/해제가 GC 압박을 가중)
                 $total = if ($totalToHash -gt 0) { $totalToHash } else { '?' }
-                $logInterval = if ($totalToHash -ge 10) { 10 } else { 1 }
+                $logInterval = if ($totalToHash -ge 100) { 100 } else { 1 }
                 if ($hashed % $logInterval -eq 0 -or $hashed -eq $totalToHash) {
                     Write-Log "  해시 진행: $hashed / $total 건 ($($f.RelativePath))" -Level Info -Step 'Step2'
                 }
@@ -276,6 +326,32 @@ function Compare-WithSnapshot {
         }
 
         if (-not $old) {
+            # 최초 실행(스냅샷 없음): 원본 공유폴더와 크기를 대조해 이미 import된 파일을 가려낸다.
+            #
+            # 판정 기준:
+            #   원본에 없음              → TouchedOnly (과거 import 후 원본에서 삭제된 것)
+            #   원본에 있고 크기 같음    → TouchedOnly (이미 import된 것으로 간주)
+            #   원본에 있고 크기 다름    → New         (원본이 나중에 바뀐 것, import 필요)
+            #   원본에만 있음(라이브러리에 없음) → 이 루프에서는 나타나지 않음(라이브러리 기준 열거)
+            #
+            # $SourceKeys 는 {key → size} hashtable (Get-SourceFileMap 반환값).
+            # UNC 원본을 다시 읽지 않고 map 에서 크기를 꺼내 비교한다.
+            if ($SourceKeys) {
+                if ($SourceKeys.ContainsKey($f.Key)) {
+                    $srcSize = $SourceKeys[$f.Key]
+                    if ($srcSize -eq $f.SizeBytes) {
+                        # 크기 동일 → 이미 import된 파일, 배치 제외
+                        $changes.Add((New-ChangeRecord -File $f -ChangeType 'TouchedOnly'))
+                        continue
+                    }
+                    # 크기 다름 → 원본이 변경된 것, import 필요 → New 로 떨어짐
+                }
+                else {
+                    # 원본에 없음 → 과거 import 후 원본에서만 삭제된 것, 배치 제외
+                    $changes.Add((New-ChangeRecord -File $f -ChangeType 'TouchedOnly'))
+                    continue
+                }
+            }
             $changes.Add((New-ChangeRecord -File $f -ChangeType 'New'))
         }
         elseif ($old.h -ne $f.Sha256) {
@@ -299,6 +375,7 @@ function Compare-WithSnapshot {
     # ------------------------------------------------------------------
     if ($null -eq $SourceKeys) {
         Write-Log "원본 파일 목록이 없어 삭제 감지를 건너뜁니다." -Level Debug -Step 'Step2'
+        $algoInstance.Dispose()
         return $changes
     }
 
@@ -326,6 +403,7 @@ function Compare-WithSnapshot {
     if ($hashFailed -gt 0) {
         Write-Log "해시 실패로 변경 판정에서 누락된 파일: $hashFailed 건 (위 경고 참조)" -Level Warn -Step 'Step2'
     }
+    $algoInstance.Dispose()
     return $changes
 }
 

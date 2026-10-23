@@ -236,18 +236,18 @@ try {
     $sourceKeys = $null
     if (-not $SkipSync) {
         try {
-            $srcFiles = @(Get-LibraryFiles -Root $cfg.paths.sourceShare `
-                                           -IncludeExtensions $cfg.scan.includeExtensions `
-                                           -ExcludeFolderNames $cfg.scan.excludeFolderNames)
-            $sourceKeys = @{}
-            foreach ($sf in $srcFiles) { $sourceKeys[$sf.Key] = $true }
-            Write-Log "원본 공유폴더 파일 수: $($srcFiles.Count) (삭제 감지 기준)" -Level Info -Step 'Step2'
+            # Get-SourceFileMap: {key → size} hashtable 만 반환해 메모리 사용을 최소화한다.
+            # (Get-LibraryFiles 로 PSCustomObject 25,000개를 만들면 GC 압박이 두 배가 됨)
+            $sourceKeys = Get-SourceFileMap -Root $cfg.paths.sourceShare `
+                                            -IncludeExtensions $cfg.scan.includeExtensions `
+                                            -ExcludeFolderNames $cfg.scan.excludeFolderNames
+            Write-Log "원본 공유폴더 파일 수: $($sourceKeys.Count) (삭제 감지 기준)" -Level Info -Step 'Step2'
 
             # 공유폴더 사망 감지기.
             # 원본이 0건이면 스냅샷의 모든 파일이 '삭제됨' 으로 보고된다.
             # 마운트는 됐는데 권한 상실 등으로 빈 폴더로 읽히는 상황이 전형적이므로
             # 아무것도 바꾸지 않고 중단한다.
-            if ($srcFiles.Count -eq 0 -and $cfg.behavior.failOnZeroFilesFound) {
+            if ($sourceKeys.Count -eq 0 -and $cfg.behavior.failOnZeroFilesFound) {
                 Write-Log ("원본 공유폴더에서 대상 파일을 하나도 찾지 못했습니다: $($cfg.paths.sourceShare)`n" +
                            "  공유폴더 접근 문제로 의심됩니다. 스냅샷을 보호하기 위해 변경 없이 중단합니다.`n" +
                            "  의도된 상태라면 config 의 behavior.failOnZeroFilesFound 를 false 로 두세요.") -Level Error -Step 'Step2'
@@ -265,6 +265,26 @@ try {
                                       -MaxFileSizeMB $cfg.scan.maxFileSizeMB `
                                       -ForceRehash:$ForceFullBaseline `
                                       -SourceKeys $sourceKeys)
+
+    # TreatAllAsNew: 최초 실행 시 robocopy 이전에 라이브러리에 없던 파일만 New 로 강제한다.
+    # - robocopy 전부터 있던 파일 → 이미 import됨 → TouchedOnly 유지
+    # - robocopy 후 새로 생긴 파일 → 아직 import 안 됨 → New 로 변경
+    # PreSyncKeys 가 없으면(SkipSync 등) 전체를 New 로 처리한다.
+    if ($treatAllAsNew) {
+        $preSyncKeys = if ($sync -and $sync.PreSyncKeys) { $sync.PreSyncKeys } else { $null }
+        $forcedNew = 0
+        $changes = @($changes | ForEach-Object {
+            if ($_.ChangeType -eq 'TouchedOnly') {
+                $isNew = -not $preSyncKeys -or -not $preSyncKeys.ContainsKey((ConvertTo-SnapshotKey $_.RelativePath))
+                if ($isNew) {
+                    $_.ChangeType = 'New'
+                    $forcedNew++
+                }
+            }
+            $_
+        })
+        Write-Log "TreatAllAsNew: 신규 강제 $forcedNew 건 (robocopy 전부터 있던 파일은 제외)" -Level Warn -Step 'Step2'
+    }
 
     $counts = @{}
     foreach ($t in @('New', 'Modified', 'TouchedOnly', 'Deleted')) {

@@ -51,6 +51,29 @@ function Invoke-Step1Sync {
     $src = $Config.paths.sourceShare
     $dst = $Config.paths.designLibrary
 
+    # robocopy 실행 전 라이브러리 파일 키 집합을 찍어둔다.
+    # 최초 실행 시 "이미 있던 파일(= 이미 import됨)" vs "새로 복사된 파일" 구분에 사용.
+    $preSyncKeys = @{}
+    try {
+        $rootFull   = [System.IO.Path]::GetFullPath($dst).TrimEnd('\')
+        $rootPrefix = $rootFull + '\'
+        $extSet = @{}
+        foreach ($e in $Config.scan.includeExtensions) { $extSet[$e.ToLowerInvariant()] = $true }
+        $enum = [System.IO.Directory]::EnumerateFiles($rootFull, '*', [System.IO.SearchOption]::TopDirectoryOnly)
+        foreach ($full in $enum) {
+            $ext = [System.IO.Path]::GetExtension($full).ToLowerInvariant()
+            if (-not $extSet.ContainsKey($ext)) { continue }
+            $rel = $full.Substring($rootPrefix.Length)
+            $key = ConvertTo-SnapshotKey $rel
+            $preSyncKeys[$key] = $true
+        }
+        Write-Log "동기화 전 라이브러리 파일 수: $($preSyncKeys.Count)" -Level Info -Step 'Step1'
+    }
+    catch {
+        Write-Log "동기화 전 라이브러리 스냅샷 실패(무시): $($_.Exception.Message)" -Level Warn -Step 'Step1'
+        $preSyncKeys = $null
+    }
+
     Write-Log "동기화 시작: $src -> $dst" -Level Info -Step 'Step1'
 
     $rcArgs = @($src, $dst)
@@ -59,7 +82,13 @@ function Invoke-Step1Sync {
     }
 
     $rcArgs += @(
-        '/E'                                        # 하위폴더 포함 (/MIR 아님)
+        # /E 미사용 - 지정 폴더 바로 아래 파일만 복사, 하위폴더 제외
+        '/XC'                                       # Changed 제외 - 시간 같고 크기만 다른 파일
+        '/XN'                                       # Newer 제외 - 원본이 더 최신인 파일
+        '/XO'                                       # Older 제외 - 원본이 더 오래된 파일
+        # → Same/Tweaked 는 기본으로 건너뛰므로, 이름이 같으면 어떤 경우든 덮어쓰지 않고
+        #   라이브러리에 없는 파일만 복사한다.
+        # ★ 주의 ★ /XN 을 빼면 원본이 더 최신일 때 라이브러리 파일을 덮어쓴다.
         '/Z'                                        # 재시작 가능 모드 - 네트워크 끊김 대비
         '/COPY:DAT'                                 # 타임스탬프 보존 (변경감지 정확도)
         '/DCOPY:T'
@@ -88,9 +117,9 @@ function Invoke-Step1Sync {
     #   if ($rc -ne 0) { fail } 로 쓰면 복사가 성공할 때마다 실패로 오판한다.
     if ($rc -ge 8) {
         Write-Log "robocopy 실패 (exit $rc): $desc" -Level Error -Step 'Step1'
-        return [pscustomobject]@{ ExitCode = $rc; Success = $false; Description = $desc }
+        return [pscustomobject]@{ ExitCode = $rc; Success = $false; Description = $desc; PreSyncKeys = $preSyncKeys }
     }
 
     Write-Log "robocopy 정상 (exit $rc): $desc" -Level Info -Step 'Step1'
-    return [pscustomobject]@{ ExitCode = $rc; Success = $true; Description = $desc }
+    return [pscustomobject]@{ ExitCode = $rc; Success = $true; Description = $desc; PreSyncKeys = $preSyncKeys }
 }
