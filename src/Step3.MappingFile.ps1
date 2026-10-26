@@ -251,6 +251,11 @@ function New-3DMappingFile {
     Write-AsciiCrlfFile -Lines @($mapLines.ToArray()) -Path $mappingPath
 
     # --- Alignment.dat -------------------------------------------------------
+    # ★ Mapping.xdm 과 마찬가지로 누적해야 한다.
+    #   같은 날 두 번 실행 시 Mapping.xdm 은 15건인데 Alignment.dat 가 5건이면
+    #   두 파일의 항목 수가 달라져 Xpedition 이 잘못된 매핑을 적용한다.
+    #   $entries 는 이미 기존 항목(carried) + 신규(added)가 합쳐져 있으므로
+    #   그대로 쓰면 된다.
     # 형식: "FPT" "XDP" User  0 0 0 0 0 0 M   (User 뒤 공백 2개)
     $alignLines = New-Object System.Collections.Generic.List[string]
     foreach ($e in $entries) {

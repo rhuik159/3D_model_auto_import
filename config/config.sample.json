@@ -16,7 +16,8 @@
     "excludeFolderNames": [
       "_archive",
       "temp",
-      "~snapshot"
+      "~snapshot",
+      "dateFolderRoot"
     ],
     "maxFileSizeMB": 500
   },
@@ -48,5 +49,13 @@
     "mappingFileName": "Mapping.xdm",
     "alignmentFileName": "Alignment.dat",
     "vendor": "User"
+  },
+  "import": {
+    "bulkTimeoutMinMinutes": 10,
+    "bulkSecondsPerFile": 15,
+    "bulkTimeoutMaxMinutes": 150,
+    "mappingTimeoutMinMinutes": 5,
+    "mappingSecondsPerFile": 3,
+    "mappingTimeoutMaxMinutes": 30
   }
 }

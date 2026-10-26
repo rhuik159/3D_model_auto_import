@@ -21,6 +21,22 @@ Xpedition EDM Library에 3D 모델(.step/.stp)을 자동으로 등록하는 파�
 
 ---
 
+## 최초 설정
+
+```powershell
+# 1) 설정 파일 준비
+Copy-Item config\config.sample.json config\config.json
+notepad config\config.json   # <<SET-ME>> 세 곳(sourceShare / designLibrary / dateFolderRoot) 채우기
+
+# 2) 드라이런으로 연결성·권한 확인
+.\Run-Sync.bat -WhatIf
+
+# 3) 최초 실행 (기준선만 생성, 날짜 폴더 없음)
+.\Run-Sync.bat
+```
+
+---
+
 ## 주요 명령어
 
 ### 파이프라인 실행
@@ -48,6 +64,14 @@ Xpedition EDM Library에 3D 모델(.step/.stp)을 자동으로 등록하는 파�
 #       -LogLevel Debug|Info|Warn|Error, -ConfigPath <경로>
 ```
 
+5~6단계만 단독 실행할 경우 (`-SkipImport`로 배치 생성 후 재실행):
+
+```powershell
+# src\Step5.Import.ps1 을 직접 실행 (날짜 폴더 지정 또는 자동 탐색)
+.\src\Step5.Import.ps1 -DateFolder 2026-10-26
+.\src\Step5.Import.ps1 -DryRun     # 메뉴 도달만 확인
+```
+
 작업 스케줄러·탐색기 진입점은 `Run-Sync.bat`(인자 그대로 전달, pwsh 우선/없으면 5.1, `-ExecutionPolicy Bypass`)이다. 더블클릭용은 `Run-Sync-Interactive.bat`(끝에 pause). `Run-Sync.bat`에 pause를 넣으면 스케줄러 작업이 시간 제한까지 멈추므로 금지. .bat 주석은 ASCII만 쓴다(콘솔 코드페이지로 읽힘).
 
 ### 테스트
@@ -61,6 +85,17 @@ Xpedition EDM Library에 3D 모델(.step/.stp)을 자동으로 등록하는 파�
 ```
 
 **양쪽 엔진(pwsh, powershell)에서 모두 통과해야 한다.** 개별 케이스 실행 옵션은 없다(전체 실행만). 기본 테스트 루트는 `C:\Temp\3dtest`(`-TestRoot`로 변경), 픽스처/설정은 `tools\New-TestFixture.ps1`, `tools\Set-TestConfig.ps1`이 만든다.
+
+테스트가 검증하는 주요 시나리오 (45개 항목):
+1. 최초 실행 → 기준선만 생성, 날짜 폴더 없음
+2. 무변경 재실행 → 변경 0건
+3. 신규·수정·터치·삭제 혼합 → 분류 정확도, 배치 구성, 삭제된 파일이 라이브러리에 유지
+4. CSV UTF-8 BOM, 한글 파일명, 대괄호 파일명 처리
+5. Mapping.xdm / Alignment.dat 포맷 (BOM 없는 ASCII + CRLF, FPT=XDP, 한글 제외 경고)
+6. 누적 실행 (같은 날 2회) → 매핑 누적, 스냅샷 갱신
+7. `-WhatIf` 드라이런 → 실제 변경 없음 확인
+8. `TreatAllAsNew` 최초 실행 → PreSyncKeys 기준 분류
+9. 스냅샷 없는 `-SkipSync` 재실행
 
 ### BOM 인코딩 수정
 
@@ -105,6 +140,30 @@ Test-JabEnabled    # Enabled = True 여야 5~6단계가 동작
 - `src\Common.Config.ps1` — config.json 로드, 경로 정규화, 접근 검증 (`Import-SyncConfig`)
 - `src\Common.Logging.ps1` — `Write-Log`, `Initialize-Log`, 보관 기간 정리
 - `src\Common.Io.ps1` — BOM-UTF8 CSV, 260자 경로 회피, SHA-256 해시, 동시 실행 락
+
+### 출력 파일 구조
+
+```
+output/
+  filelist_yyyy-MM-dd.csv      # 라이브러리 전체 목록 (매 실행 덮어쓰기)
+  changes_yyyy-MM-dd.csv       # 변경 리포트 (하루 여러 번 실행 시 누적)
+  dryrun/                      # -WhatIf 실행 결과
+  edm_verify_<날짜시각>.csv   # -Verify 결과 (MISSING/OK/ORPHAN 정렬)
+
+<dateFolderRoot>/yyyy-MM-dd/
+  <원본 하위구조 그대로>/*.step  # Import 대상 파일
+  Mapping.xdm                    # 3D 매핑 파일 (BOM 없는 ASCII+CRLF, 누적)
+  Alignment.dat                  # Alignment 파일 (동일 형식, 누적)
+  _batch_manifest.csv            # 이 배치의 내역 (RunTime으로 회차 구분)
+
+state/
+  snapshot.json      # SHA-256 해시 스냅샷 (Import 성공 시에만 갱신)
+  snapshot.bak.json  # 이전 스냅샷 백업
+
+logs/
+  sync_yyyy-MM-dd.log       # 파이프라인 로그
+  robocopy_yyyy-MM-dd.log   # robocopy 자체 로그
+```
 
 ### GUI 자동화 계층 (5~6단계)
 
@@ -155,6 +214,7 @@ RDP 세션이 Disconnected 상태이면 디스플레이가 없어 JAB 연결이 
 - `config\config.json` — 실제 설정 (.gitignore로 제외)
 - `<<SET-ME>>` 센티널이 남아 있으면 실행 시 fail-fast로 중단된다.
 - 상대경로는 CWD가 아닌 **리포지토리 루트** 기준으로 정규화된다 (작업 스케줄러 대응).
+- `import` 섹션(선택): Bulk Import / Mapping File 완료 대기 시간 = `max(최소분, 날짜폴더 파일 수 × 파일당 초)`를 최대분으로 자름 (`Get-ImportTimeouts`). 섹션이 없으면 기본값(Bulk 10~150분·15초/개, Mapping 5~30분·3초/개). 시간 초과 시 finally의 `Stop-Cockpit`이 진행 중인 Cockpit을 강제 종료하므로 너무 작게 잡지 말 것. 최대값 합은 작업 스케줄러 제한(4시간) 안이어야 한다.
 
 ---
 
@@ -163,6 +223,16 @@ RDP 세션이 Disconnected 상태이면 디스플레이가 없어 JAB 연결이 
 ### 스냅샷 보호
 
 Import가 실패하면 스냅샷을 갱신하지 않는다. 갱신하면 그날 변경분이 '기존'으로 흡수되어 다음 실행에서 누락된다. 종료코드 7이 반환된 경우 원인 조치 후 재실행하면 같은 변경분을 다시 처리한다.
+
+### Verify → 자동 재Import (`-Verify` 연동)
+
+`-Verify` 실행 후 MISSING 파일이 발견되면 `Invoke-VerifyReimport` 함수가 자동으로 다음을 수행한다:
+1. Verify CSV에서 `Status = MISSING` 행을 읽는다.
+2. 해당 파일을 라이브러리에서 **오늘 날짜 폴더**로 복사한다 (이미 폴더가 있으면 누적).
+3. Mapping.xdm / Alignment.dat를 누적 갱신한다.
+4. Cockpit Import를 재실행한다 (`-SkipImport`이면 폴더 준비까지만).
+
+재Import 실패는 **경고(종료코드 미영향)**로만 남긴다. 이 함수는 스냅샷을 건드리지 않는다 — 스냅샷이 이미 갱신된 상태이고 다음 실행에서 이 파일들은 `Unchanged`로 처리되기 때문이다.
 
 ### robocopy 종료코드
 
@@ -181,6 +251,10 @@ Import가 실패하면 스냅샷을 갱신하지 않는다. 갱신하면 그날 
 - `TreatAllAsNew`: Step1이 복사 **전에** 찍은 `PreSyncKeys`에 없던 파일(=이번에 새로 복사된 파일)만 `New`로 강제한다. 기존 파일은 이미 Import된 것으로 보고 `TouchedOnly` 유지. `-SkipSync`로 `PreSyncKeys`가 없으면 전체가 `New`가 된다.
 - 스냅샷 없이 비교할 때는 원본 폴더를 `{key→size}` 맵(`Get-SourceFileMap`)으로만 읽어 크기가 다르면 `New`, 같거나 원본에 없으면 `TouchedOnly`로 본다 (UNC 원본 해시 생략).
 
+### `batch.includeModified` 기본값 `false`
+
+`Modified`(해시가 바뀐 파일)는 기본적으로 날짜 폴더에 포함하지 않는다. 설계팀 운영 규칙상 개정본은 수동으로 처리하기 때문이다. 개정본도 자동 배치에 포함시키려면 `config.json`에서 `"batch.includeModified": true`로 변경한다. **변경 분류 자체(New/Modified/TouchedOnly/Deleted)에는 영향 없다.**
+
 ### 변경 분류
 
 `New` / `Modified`만 날짜 폴더에 넣는다. `TouchedOnly`(해시 동일, mtime만 변경)를 포함하면 재Import 불필요 파일로 배치가 가득 찬다. `Deleted`는 보고만 하고 파일을 삭제하지 않는다(`/MIR` 미사용 설계).
@@ -189,9 +263,13 @@ Import가 실패하면 스냅샷을 갱신하지 않는다. 갱신하면 그날 
 
 `changes_yyyy-MM-dd.csv`는 하루에 여러 번 실행 시 누적된다. `RunTime` 컬럼으로 회차를 구분한다. 덮어쓰는 곳은 `filelist_*.csv`뿐이다.
 
-### Mapping.xdm 누적
+### Mapping.xdm / Alignment.dat 누적
 
-날짜 폴더 안에 이미 파일이 있으면 기존 항목을 이어받은 뒤 신규를 추가한다. 덮어쓰면 오전 실행분의 부품이 매핑에서 사라진다.
+날짜 폴더 안에 이미 파일이 있으면 기존 항목을 이어받은 뒤 신규를 추가한다. 덮어쓰면 오전 실행분의 부품이 매핑에서 사라진다. **Mapping.xdm과 Alignment.dat는 항상 같은 항목 수를 가져야 한다.** 한쪽만 누적하면 두 파일이 불일치해 Xpedition이 잘못된 매핑을 적용한다 (Step3.MappingFile.ps1에서 `$entries` 기준으로 양쪽 모두 기록).
+
+### EdmVerify 스캔 방식과 제외 폴더 하드코딩
+
+`EdmVerify.java`는 **재귀 탐색**으로 라이브러리를 스캔하고, `Get-LibraryFiles`는 `TopDirectoryOnly`다. 라이브러리를 항상 **평탄(flat) 구조**로 유지하지 않으면 하위 폴더 파일이 파이프라인은 인식하지 않고 Verify는 발견해 **MISSING 오탐**이 발생한다. 또한 `excludeFolderNames`는 Java 코드에 하드코딩되어 있으므로 config.json에 새 폴더를 추가하면 `EdmVerify.java`도 함께 수정해야 한다.
 
 ### mtime 비교
 

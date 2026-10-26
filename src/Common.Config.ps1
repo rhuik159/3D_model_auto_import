@@ -76,6 +76,21 @@ function Import-SyncConfig {
     if ($cfg.robocopy.threads -lt 1 -or $cfg.robocopy.threads -gt 128) {
         throw "robocopy.threads 는 1~128 범위여야 합니다 (현재: $($cfg.robocopy.threads))"
     }
+    # import 섹션은 선택 사항 (없으면 Step5 의 기본값 사용). 있으면 값만 검증한다.
+    if ($cfg.PSObject.Properties['import']) {
+        foreach ($p in $cfg.import.PSObject.Properties) {
+            if (-not ($p.Value -is [ValueType]) -or [double]$p.Value -le 0) {
+                throw "import.$($p.Name) 는 0보다 큰 숫자여야 합니다 (현재: $($p.Value))"
+            }
+        }
+        foreach ($kind in @('bulk', 'mapping')) {
+            $minP = $cfg.import.PSObject.Properties["${kind}TimeoutMinMinutes"]
+            $maxP = $cfg.import.PSObject.Properties["${kind}TimeoutMaxMinutes"]
+            if ($minP -and $maxP -and [double]$minP.Value -gt [double]$maxP.Value) {
+                throw "import.${kind}TimeoutMinMinutes($($minP.Value)) 가 ${kind}TimeoutMaxMinutes($($maxP.Value)) 보다 큽니다."
+            }
+        }
+    }
 
     return $cfg
 }

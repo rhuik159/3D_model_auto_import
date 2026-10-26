@@ -171,10 +171,27 @@ public class EdmVerify {
         for (File f : kids) {
             if (f.isDirectory()) {
                 String n = f.getName().toLowerCase(Locale.ROOT);
-                // 배치 폴더와 보관 폴더는 라이브러리 본체가 아니므로 건너뛴다.
-                // (config.json 의 scan.excludeFolderNames 와 같은 취지)
+                // 배치 폴더·보관 폴더는 라이브러리 본체가 아니므로 건너뛴다.
+                // ★ 주의 ★ config.json 의 scan.excludeFolderNames 와 수동으로 일치시켜야 한다.
+                //   Java 코드라 config 를 직접 읽지 못하므로 여기에 하드코딩돼 있다.
+                //   config 에 폴더를 추가했으면 이 목록도 함께 수정해야 한다.
+                //
+                // ★ 재귀 스캔 vs TopDirectoryOnly 불일치 ★
+                //   Get-LibraryFiles 는 TopDirectoryOnly 이므로 하위 폴더 파일은 파이프라인이
+                //   인식하지 않는다. 하지만 EdmVerify 는 재귀로 모든 하위 폴더를 보기 때문에
+                //   하위 폴더에 STEP 파일이 존재하면 MISSING 오탐이 나온다.
+                //   라이브러리를 항상 평탄(flat)하게 유지하면 문제없다.
                 if (n.equals("datefolderroot") || n.equals("_archive")
                         || n.equals("temp") || n.equals("~snapshot")) {
+                    continue;
+                }
+                // datefolderRoot 는 보통 날짜 이름(yyyy-MM-dd) 하위 폴더를 거느린다.
+                // 라이브러리 루트 직계 하위 폴더만 재귀하면 날짜 폴더를 잡지 않으나,
+                // datefolderroot 자체가 라이브러리 루트 아래에 있지 않을 수도 있으므로
+                // 이름 기반 제외를 먼저 적용한다 (위 조건에서 처리됨).
+                // 루트 직계가 아닌 하위의 datefolderRoot 는 이름이 다를 수 있어
+                // 안전을 위해 날짜 형식 폴더(yyyy-MM-dd)도 건너뛴다.
+                if (dir.equals(root) && n.matches("\\d{4}-\\d{2}-\\d{2}")) {
                     continue;
                 }
                 scan(root, f, out);

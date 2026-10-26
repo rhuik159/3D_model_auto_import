@@ -97,6 +97,150 @@ $RepoRoot = $PSScriptRoot
 
 if (-not $ConfigPath) { $ConfigPath = Join-Path $RepoRoot 'config\config.json' }
 
+# ================================================================ Verify 재Import 헬퍼
+<#
+.SYNOPSIS
+    -Verify 가 찾아낸 MISSING 파일을 오늘 날짜 폴더에 다시 스테이징하고 Cockpit 을 재실행한다.
+
+.DESCRIPTION
+    스냅샷에는 "import됨"으로 기록됐지만 EDM 서버에는 없는 파일이 있을 때 호출된다.
+    이 상황은 다음 케이스에서 발생한다:
+      - Cockpit 이 일부 파일만 Import 하고 조용히 넘어간 경우
+      - 서버 장애 등으로 Import 가 완료됐지만 실제 등록은 안 된 경우
+      - 스냅샷이 수동으로 조작된 경우
+
+    처리 흐름:
+      1. Verify CSV 에서 Status = MISSING 인 행을 읽는다.
+      2. 라이브러리에서 해당 파일을 오늘 날짜 폴더로 복사한다.
+      3. Mapping.xdm / Alignment.dat 를 (누적 방식으로) 생성한다.
+      4. Cockpit Import 를 실행한다 (-SkipImport 이면 3단계까지).
+
+    ★ 스냅샷은 건드리지 않는다. ★
+      이미 갱신된 상태이고, 파이프라인 성패와 무관한 재시도이므로 그대로 둔다.
+      다음 실행 때 스냅샷이 이 파일들을 "Unchanged" 로 보는 게 정상이다.
+#>
+function Invoke-VerifyReimport {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$Config,
+        [Parameter(Mandatory)][string]$VerifyCsv,
+        [switch]$SkipImport,
+        [switch]$KeepCockpitOpen,
+        [switch]$ReuseCockpit
+    )
+
+    Write-LogBanner "Verify 재Import - MISSING 파일 재스테이징"
+
+    # --- MISSING 행 읽기 ---------------------------------------------------
+    $missing = @()
+    try {
+        $rows = @(Import-Csv -LiteralPath $VerifyCsv -Encoding UTF8)
+        $missing = @($rows | Where-Object { $_.Status -eq 'MISSING' })
+    }
+    catch {
+        Write-Log "Verify CSV 를 읽을 수 없어 재Import 를 건너뜁니다: $($_.Exception.Message)" `
+            -Level Warn -Step 'Verify'
+        return
+    }
+
+    if ($missing.Count -eq 0) {
+        Write-Log "MISSING 파일이 없습니다. 재Import 불필요." -Level Info -Step 'Verify'
+        return
+    }
+
+    Write-Log "재Import 대상 MISSING 파일: $($missing.Count) 건" -Level Warn -Step 'Verify'
+    foreach ($r in $missing) {
+        Write-Log "  MISSING: $($r.RelativePath)" -Level Warn -Step 'Verify'
+    }
+
+    # --- 오늘 날짜 폴더로 복사 ---------------------------------------------
+    $folderName = (Get-Date).ToString('yyyy-MM-dd')
+    $batchPath  = Join-Path $Config.paths.dateFolderRoot $folderName
+
+    if (-not (Test-Path -LiteralPath $batchPath)) {
+        New-Item -ItemType Directory -Path $batchPath -Force | Out-Null
+    }
+    Write-Log "재Import 날짜 폴더: $batchPath" -Level Info -Step 'Verify'
+
+    $staged  = 0
+    $copyFailed = 0
+    $stagedFiles = New-Object System.Collections.Generic.List[object]
+
+    foreach ($r in $missing) {
+        $relPath = $r.RelativePath
+        if ([string]::IsNullOrWhiteSpace($relPath)) { continue }
+
+        try {
+            $srcFull = Join-Path $Config.paths.designLibrary $relPath
+            $dstFull = Join-Path $batchPath $relPath
+
+            $dstDir = Split-Path -Parent $dstFull
+            if ($dstDir -and -not (Test-Path -LiteralPath $dstDir)) {
+                New-Item -ItemType Directory -Path $dstDir -Force | Out-Null
+            }
+
+            Copy-Item -LiteralPath (ConvertTo-ExtendedPath $srcFull) `
+                      -Destination (ConvertTo-ExtendedPath $dstFull) -Force -ErrorAction Stop
+
+            $staged++
+            $stagedFiles.Add([pscustomobject]@{
+                PartNumber = [System.IO.Path]::GetFileNameWithoutExtension($relPath)
+                FileName   = [System.IO.Path]::GetFileName($relPath)
+                RelativePath = $relPath
+            })
+        }
+        catch {
+            $copyFailed++
+            Write-Log "MISSING 파일 복사 실패(건너뜀): $relPath - $($_.Exception.Message)" `
+                -Level Warn -Step 'Verify'
+        }
+    }
+
+    Write-Log "재스테이징 완료: 복사 $staged 건, 실패 $copyFailed 건" -Level Info -Step 'Verify'
+
+    if ($staged -eq 0) {
+        Write-Log "복사된 파일이 없어 재Import 를 건너뜁니다." -Level Warn -Step 'Verify'
+        return
+    }
+
+    # --- Mapping.xdm / Alignment.dat 갱신 (누적) --------------------------
+    $mapResult = New-3DMappingFile -ChangedFiles @($stagedFiles.ToArray()) `
+                                   -OutputDirectory $batchPath `
+                                   -MappingFileName $Config.mapping.mappingFileName `
+                                   -AlignmentFileName $Config.mapping.alignmentFileName `
+                                   -Vendor $Config.mapping.vendor `
+                                   -Enabled:$Config.mapping.enabled
+    if ($mapResult) {
+        Write-Log "재Import 매핑 파일 준비 완료: $($mapResult.Count) 건" -Level Info -Step 'Verify'
+    }
+
+    # --- Cockpit Import 재실행 ---------------------------------------------
+    if ($SkipImport) {
+        Write-Log ("-SkipImport 이므로 재Import 폴더만 준비하고 끝냅니다:`n" +
+                   "  $batchPath") -Level Warn -Step 'Verify'
+        return
+    }
+
+    Write-Log "MISSING 파일 Cockpit 재Import 시작..." -Level Info -Step 'Verify'
+    try {
+        $to = Get-ImportTimeouts -DatePath $batchPath -Config $Config
+        $imp = Invoke-Step5Import -DatePath $batchPath `
+                                  -MappingFileName $Config.mapping.mappingFileName `
+                                  -Reuse:$ReuseCockpit `
+                                  -CloseCockpit:(-not $KeepCockpitOpen) `
+                                  -BulkTimeoutMs $to.BulkTimeoutMs `
+                                  -MappingTimeoutMs $to.MappingTimeoutMs
+        if ($imp.Success) {
+            Write-Log "MISSING 파일 재Import 완료" -Level Info -Step 'Verify'
+        }
+    }
+    catch {
+        # 재Import 실패는 경고로만 남긴다. 파이프라인 종료코드에는 영향 없음.
+        Write-Log ("MISSING 파일 재Import 실패(경고): $($_.Exception.Message)`n" +
+                   "  날짜 폴더는 남아 있습니다: $batchPath") -Level Warn -Step 'Verify'
+    }
+}
+
 $lockStream = $null
 $lockPath   = $null
 $exitCode   = 0
@@ -270,8 +414,16 @@ try {
     # - robocopy 전부터 있던 파일 → 이미 import됨 → TouchedOnly 유지
     # - robocopy 후 새로 생긴 파일 → 아직 import 안 됨 → New 로 변경
     # PreSyncKeys 가 없으면(SkipSync 등) 전체를 New 로 처리한다.
+    #
+    # ★ StrictMode 주의 ★ -SkipSync 이면 $sync 가 선언조차 되지 않았으므로
+    #   '$sync -and ...' 앞에 Get-Variable 가드가 있어야 한다.
     if ($treatAllAsNew) {
-        $preSyncKeys = if ($sync -and $sync.PreSyncKeys) { $sync.PreSyncKeys } else { $null }
+        $syncVar = Get-Variable -Name 'sync' -ErrorAction SilentlyContinue
+        $preSyncKeys = if ($syncVar -and $syncVar.Value -and $syncVar.Value.PreSyncKeys) {
+            $syncVar.Value.PreSyncKeys
+        } else {
+            $null
+        }
         $forcedNew = 0
         $changes = @($changes | ForEach-Object {
             if ($_.ChangeType -eq 'TouchedOnly') {
@@ -357,10 +509,14 @@ try {
             else {
                 Write-LogBanner "5~6단계 Cockpit Import 시작 ($($batch.StagedCount) 개 파일)"
                 try {
+                    # 완료 대기 시간은 날짜 폴더 파일 수에 비례 (고정 10분이면 200개 이상에서 강제 종료됨)
+                    $to = Get-ImportTimeouts -DatePath $batch.BatchPath -Config $cfg
                     $imp = Invoke-Step5Import -DatePath $batch.BatchPath `
                                               -MappingFileName $cfg.mapping.mappingFileName `
                                               -Reuse:$ReuseCockpit `
-                                              -CloseCockpit:(-not $KeepCockpitOpen)
+                                              -CloseCockpit:(-not $KeepCockpitOpen) `
+                                              -BulkTimeoutMs $to.BulkTimeoutMs `
+                                              -MappingTimeoutMs $to.MappingTimeoutMs
                     if ($imp.Success) {
                         Write-Log "Cockpit Import 완료" -Level Info -Step 'Step5'
                         $importDone = $true
@@ -444,6 +600,19 @@ try {
             elseif ($vrc -eq 1) {
                 Write-Log ("검증 결과 미등록 항목이 있습니다. CSV 를 확인하세요:`n" +
                            "  $verifyCsv") -Level Warn -Step 'Verify'
+
+                # ----------------------------------------------------------------
+                # 스냅샷은 "import됨"으로 기록했지만 실제로 EDM에 없는 파일이 있다.
+                # MISSING 파일을 오늘 날짜 폴더에 다시 복사하고 Cockpit Import 를 재실행한다.
+                # SkipImport 이면 폴더만 준비하고 Import 는 하지 않는다.
+                # ----------------------------------------------------------------
+                if (-not $isDryRun -and (Test-Path -LiteralPath $verifyCsv)) {
+                    Invoke-VerifyReimport -Config $cfg `
+                                         -VerifyCsv $verifyCsv `
+                                         -SkipImport:$SkipImport `
+                                         -KeepCockpitOpen:$KeepCockpitOpen `
+                                         -ReuseCockpit:$ReuseCockpit
+                }
             }
             else {
                 Write-Log ("검증을 수행하지 못했습니다 (종료코드 $vrc).`n" +

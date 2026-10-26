@@ -35,6 +35,12 @@
 
 .PARAMETER CloseCockpit
     작업이 끝나면 Cockpit 을 종료한다.
+
+.PARAMETER BulkTimeoutMinutes
+    Bulk Import 완료 대기 시간(분). 생략(0)하면 파일 수와 config 의 import 섹션으로 계산.
+
+.PARAMETER MappingTimeoutMinutes
+    Import Mapping File 완료 대기 시간(분). 생략(0)하면 자동 계산.
 #>
 [CmdletBinding()]
 param(
@@ -43,7 +49,9 @@ param(
     [string]$DateFolder = '',
     [switch]$DryRun,
     [switch]$Reuse,
-    [switch]$CloseCockpit
+    [switch]$CloseCockpit,
+    [int]$BulkTimeoutMinutes    = 0,
+    [int]$MappingTimeoutMinutes = 0
 )
 
 Set-StrictMode -Version Latest
@@ -124,6 +132,67 @@ function Stop-Cockpit {
     return $true
 }
 
+function Get-ImportTimeouts {
+    <#
+    .SYNOPSIS
+        날짜 폴더의 파일 수에 비례해 Bulk Import / Mapping File 완료 대기 시간을 계산한다.
+
+    .DESCRIPTION
+        고정 10분이면 파일이 많을 때(200개 이상) Import 도중 시간 초과가 나고,
+        finally 의 Stop-Cockpit 이 진행 중인 Cockpit 을 강제 종료해 버린다(실제로 겪음).
+
+        대기 시간 = max(최소분, 파일 수 × 파일당 초) 를 최대분으로 자른다.
+        값은 config 의 import 섹션에서 읽고, 섹션/키가 없으면 기본값을 쓴다
+        (import 섹션이 없는 기존 운영 config 도 그대로 동작해야 한다).
+
+        파일 수는 날짜 폴더 전체 기준이다. 같은 날 여러 번 실행하면 폴더가 누적되고
+        Bulk Import 는 폴더 전체를 다시 읽기 때문이다.
+
+    .OUTPUTS
+        PSCustomObject { FileCount, BulkTimeoutMs, MappingTimeoutMs }
+    #>
+    param(
+        [Parameter(Mandatory)][string]$DatePath,
+        [Parameter(Mandatory)]$Config
+    )
+
+    # 실측: 10분에 약 70개(≈8.6초/개) → 여유를 두고 15초/개.
+    # 최대값 합계(150+30분)는 작업 스케줄러 실행 제한(4시간, Register-Task.ps1) 안에 들어와야 한다.
+    $defaults = [ordered]@{
+        bulkTimeoutMinMinutes    = 10
+        bulkSecondsPerFile       = 15
+        bulkTimeoutMaxMinutes    = 150
+        mappingTimeoutMinMinutes = 5
+        mappingSecondsPerFile    = 3
+        mappingTimeoutMaxMinutes = 30
+    }
+    # StrictMode 에서 없는 속성을 읽으면 예외가 나므로 PSObject.Properties 로 확인한다.
+    $section = $null
+    if ($Config.PSObject.Properties['import']) { $section = $Config.import }
+    $s = @{}
+    foreach ($k in $defaults.Keys) {
+        $s[$k] = if ($section -and $section.PSObject.Properties[$k]) { [double]$section.$k } else { $defaults[$k] }
+    }
+
+    $extSet = @{}
+    foreach ($e in $Config.scan.includeExtensions) { $extSet[$e.ToLowerInvariant()] = $true }
+    $count = @([System.IO.Directory]::EnumerateFiles($DatePath, '*', [System.IO.SearchOption]::AllDirectories) |
+               Where-Object { $extSet.ContainsKey([System.IO.Path]::GetExtension($_).ToLowerInvariant()) }).Count
+
+    $calc = {
+        param([double]$minMin, [double]$secPerFile, [double]$maxMin)
+        $sec = [Math]::Max($minMin * 60, $count * $secPerFile)
+        $sec = [Math]::Min($sec, $maxMin * 60)
+        return [int]($sec * 1000)
+    }
+
+    return [PSCustomObject]@{
+        FileCount        = $count
+        BulkTimeoutMs    = (& $calc $s.bulkTimeoutMinMinutes $s.bulkSecondsPerFile $s.bulkTimeoutMaxMinutes)
+        MappingTimeoutMs = (& $calc $s.mappingTimeoutMinMinutes $s.mappingSecondsPerFile $s.mappingTimeoutMaxMinutes)
+    }
+}
+
 function Invoke-Step5Import {
     <#
     .SYNOPSIS
@@ -152,6 +221,7 @@ function Invoke-Step5Import {
 
     Write-Log "  날짜 폴더 : $DatePath" -Level Info -Step 'Step5'
     Write-Log "  매핑 파일 : $mappingFile" -Level Info -Step 'Step5'
+    Write-Log ("  완료 대기 한도: Bulk {0:N0}분 / Mapping {1:N0}분" -f ($BulkTimeoutMs / 60000), ($MappingTimeoutMs / 60000)) -Level Info -Step 'Step5'
     if ($DryRun) { Write-Log "  [DRY RUN] 실제 Import 없음" -Level Warn -Step 'Step5' }
 
     $cockpitPid = 0
@@ -325,9 +395,14 @@ if ($MyInvocation.InvocationName -ne '.') {
     }
 
     Write-Log "Step5 Import 시작"
+    $to = Get-ImportTimeouts -DatePath $datePath -Config $cfg
+    $bulkMs    = if ($BulkTimeoutMinutes    -gt 0) { $BulkTimeoutMinutes    * 60000 } else { $to.BulkTimeoutMs }
+    $mappingMs = if ($MappingTimeoutMinutes -gt 0) { $MappingTimeoutMinutes * 60000 } else { $to.MappingTimeoutMs }
+    Write-Log "  날짜 폴더 파일 수: $($to.FileCount)" -Level Info -Step 'Step5'
     $r = Invoke-Step5Import -DatePath $datePath `
                             -MappingFileName $cfg.mapping.mappingFileName `
-                            -DryRun:$DryRun -Reuse:$Reuse -CloseCockpit:$CloseCockpit
+                            -DryRun:$DryRun -Reuse:$Reuse -CloseCockpit:$CloseCockpit `
+                            -BulkTimeoutMs $bulkMs -MappingTimeoutMs $mappingMs
     Write-Log "Step5 완료" -Level Info
     $r
 }
