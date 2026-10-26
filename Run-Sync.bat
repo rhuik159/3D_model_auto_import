@@ -13,12 +13,17 @@ REM  Usage
 REM    Run-Sync.bat              normal run
 REM    Run-Sync.bat -WhatIf      dry run, changes nothing
 REM    Run-Sync.bat -SkipSync    skip robocopy, scan only
-REM    Run-Sync.bat -Verify           check EDM registration (read-only, diagnostic)
-REM    Run-Sync.bat -Verify -Reimport  check + re-import MISSING files automatically
-REM    Run-Sync.bat -SkipVerify       skip the check even if enabled in config
+REM    Run-Sync.bat -Verify                             check EDM registration (read-only)
+REM    Run-Sync.bat -Verify -Reimport                   check + re-import ALL MISSING files
+REM    Run-Sync.bat -Reimport -ReimportCsv <csv-path>   re-import from edited CSV (selective)
+REM    Run-Sync.bat -SkipVerify                         skip check even if enabled in config
 REM
-REM  -Verify alone is diagnostic only: it never changes the exit code and
-REM  never fails the run. -Reimport triggers re-import of MISSING files.
+REM  Workflow for selective re-import:
+REM    1. Run-Sync.bat -Verify          (creates output\edm_verify_*.csv)
+REM    2. Open the CSV in Excel, delete rows you do NOT want to re-import
+REM    3. Run-Sync.bat -Reimport -ReimportCsv output\edm_verify_<timestamp>.csv
+REM
+REM  -Verify alone is diagnostic only: it never changes the exit code.
 REM  Turn Verify on permanently with verify.enabled in config.json.
 REM
 REM  Exit codes are passed through from the PowerShell script:

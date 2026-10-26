@@ -48,8 +48,18 @@
     config 에서 켜져 있어도 이번 실행에서는 검증을 건너뛴다.
 
 .PARAMETER Reimport
-    -Verify 검증 결과 MISSING 파일이 있으면 자동으로 재Import 한다.
-    -Verify 와 함께 쓴다. -Verify 없이 단독으로 쓰면 무시된다.
+    MISSING 파일을 재Import 한다. 두 가지 사용법이 있다.
+
+    1) -Verify -Reimport
+       이번 실행의 검증 결과 CSV 를 그대로 사용해 모든 MISSING 파일을 재Import.
+
+    2) -Reimport -ReimportCsv <경로>
+       -Verify 없이 단독 사용. 이전에 생성된 edm_verify_*.csv 를 직접 지정.
+       CSV 를 엑셀 등에서 편집해 재Import 할 행만 남긴 뒤 지정하면 선택적 재Import 가능.
+
+.PARAMETER ReimportCsv
+    재Import 에 사용할 Verify CSV 파일 경로 (edm_verify_*.csv).
+    -Reimport 와 함께 쓴다. -Verify 도 함께 쓰면 이 경로 대신 이번 실행 CSV 가 사용된다.
 
 .EXAMPLE
     .\Run-3DModelSync.ps1 -WhatIf
@@ -86,6 +96,7 @@ param(
     [switch]$Verify,
     [switch]$SkipVerify,
     [switch]$Reimport,
+    [string]$ReimportCsv,
     [ValidateSet('Debug', 'Info', 'Warn', 'Error')][string]$LogLevel = 'Info'
 )
 
@@ -607,9 +618,11 @@ try {
             elseif ($vrc -eq 1) {
                 Write-Log ("검증 결과 미등록 항목이 있습니다. CSV 를 확인하세요:`n" +
                            "  $verifyCsv`n" +
-                           "  재Import 하려면 -Verify -Reimport 를 함께 지정하세요.") -Level Warn -Step 'Verify'
+                           "  전체 재Import : -Verify -Reimport`n" +
+                           "  선택 재Import : CSV 에서 원하는 행만 남긴 뒤 -Reimport -ReimportCsv <경로>") `
+                    -Level Warn -Step 'Verify'
 
-                # -Reimport 스위치가 있을 때만 자동 재Import 를 수행한다.
+                # -Reimport 스위치가 있을 때만 재Import 를 수행한다.
                 # -Verify 단독이면 진단 결과만 남기고 끝낸다.
                 if ($Reimport -and -not $isDryRun -and (Test-Path -LiteralPath $verifyCsv)) {
                     Invoke-VerifyReimport -Config $cfg `
@@ -627,6 +640,29 @@ try {
         catch {
             # 검증 실패가 파이프라인 실패로 번지지 않게 한다.
             Write-Log ("검증 중 오류(무시하고 계속): $($_.Exception.Message)") -Level Warn -Step 'Verify'
+        }
+    }
+
+    # -------------------------------------------------------- CSV 지정 재Import
+    # -Reimport -ReimportCsv <경로>: Verify 없이 편집된 CSV 를 직접 지정해 재Import.
+    # -Verify -Reimport 와 함께 쓰면 위 Verify 블록에서 이미 처리하므로 여기는 건너뛴다.
+    if ($Reimport -and $ReimportCsv -and -not $verifyEnabled -and -not $isDryRun) {
+        if (-not (Test-Path -LiteralPath $ReimportCsv)) {
+            Write-Log "지정한 ReimportCsv 파일이 없습니다: $ReimportCsv" -Level Error -Step 'Verify'
+        }
+        else {
+            Write-LogBanner "CSV 지정 재Import"
+            Write-Log "대상 CSV: $ReimportCsv" -Level Info -Step 'Verify'
+            try {
+                Invoke-VerifyReimport -Config $cfg `
+                                     -VerifyCsv $ReimportCsv `
+                                     -SkipImport:$SkipImport `
+                                     -KeepCockpitOpen:$KeepCockpitOpen `
+                                     -ReuseCockpit:$ReuseCockpit
+            }
+            catch {
+                Write-Log ("재Import 중 오류(무시하고 계속): $($_.Exception.Message)") -Level Warn -Step 'Verify'
+            }
         }
     }
 

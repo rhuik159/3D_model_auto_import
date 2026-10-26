@@ -60,8 +60,14 @@ notepad config\config.json   # <<SET-ME>> 세 곳(sourceShare / designLibrary / 
 # EDM 등록 검증만 (진단용 — 종료코드 무영향, MISSING 있어도 재Import 안 함)
 .\Run-3DModelSync.ps1 -Verify
 
-# EDM 등록 검증 + MISSING 파일 자동 재Import
+# EDM 등록 검증 + 전체 MISSING 파일 자동 재Import
 .\Run-3DModelSync.ps1 -Verify -Reimport
+
+# 선택적 재Import: CSV 편집 후 지정
+# 1) -Verify 로 edm_verify_*.csv 생성
+# 2) 엑셀에서 재Import 할 행만 남기고 저장
+# 3) 편집된 CSV 경로로 재Import
+.\Run-3DModelSync.ps1 -Reimport -ReimportCsv .\output\edm_verify_2026-10-26_103045.csv
 
 # -SkipVerify: config 의 verify.enabled 를 이번 실행에서만 무시
 .\Run-3DModelSync.ps1 -SkipVerify
@@ -230,9 +236,16 @@ RDP 세션이 Disconnected 상태이면 디스플레이가 없어 JAB 연결이 
 
 Import가 실패하면 스냅샷을 갱신하지 않는다. 갱신하면 그날 변경분이 '기존'으로 흡수되어 다음 실행에서 누락된다. 종료코드 7이 반환된 경우 원인 조치 후 재실행하면 같은 변경분을 다시 처리한다.
 
-### Verify → 재Import (`-Verify -Reimport` 연동)
+### Verify → 재Import (`-Reimport` 연동)
 
 `-Verify`는 진단만 수행한다. MISSING 파일을 재Import 하려면 **`-Reimport`를 함께** 지정해야 한다.
+
+**선택적 재Import (수백~수천 개 파일):**
+1. `-Verify`로 `output/edm_verify_<날짜시각>.csv` 생성
+2. CSV를 엑셀에서 열어 재Import 할 행만 남기고 저장
+3. `-Reimport -ReimportCsv <경로>`로 편집된 CSV 기준 재Import
+
+**전체 재Import:** `-Verify -Reimport`로 모든 MISSING 파일을 한 번에 처리.
 
 `-Verify -Reimport` 실행 시 MISSING 파일이 발견되면 `Invoke-VerifyReimport` 함수가 자동으로 다음을 수행한다:
 1. Verify CSV에서 `Status = MISSING` 행을 읽는다.
