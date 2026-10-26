@@ -57,8 +57,14 @@ notepad config\config.json   # <<SET-ME>> 세 곳(sourceShare / designLibrary / 
 # 스냅샷 무시 후 기준선 재생성
 .\Run-3DModelSync.ps1 -ForceFullBaseline
 
-# EDM 등록 검증 포함 (진단용 — 종료코드에 영향 없음, 미등록은 경고만)
-.\Run-3DModelSync.ps1 -Verify      # -SkipVerify 로 config 의 verify.enabled 무시
+# EDM 등록 검증만 (진단용 — 종료코드 무영향, MISSING 있어도 재Import 안 함)
+.\Run-3DModelSync.ps1 -Verify
+
+# EDM 등록 검증 + MISSING 파일 자동 재Import
+.\Run-3DModelSync.ps1 -Verify -Reimport
+
+# -SkipVerify: config 의 verify.enabled 를 이번 실행에서만 무시
+.\Run-3DModelSync.ps1 -SkipVerify
 
 # 기타: -KeepCockpitOpen(Import 후 Cockpit 유지), -ReuseCockpit(떠 있는 Cockpit 재사용),
 #       -LogLevel Debug|Info|Warn|Error, -ConfigPath <경로>
@@ -224,9 +230,11 @@ RDP 세션이 Disconnected 상태이면 디스플레이가 없어 JAB 연결이 
 
 Import가 실패하면 스냅샷을 갱신하지 않는다. 갱신하면 그날 변경분이 '기존'으로 흡수되어 다음 실행에서 누락된다. 종료코드 7이 반환된 경우 원인 조치 후 재실행하면 같은 변경분을 다시 처리한다.
 
-### Verify → 자동 재Import (`-Verify` 연동)
+### Verify → 재Import (`-Verify -Reimport` 연동)
 
-`-Verify` 실행 후 MISSING 파일이 발견되면 `Invoke-VerifyReimport` 함수가 자동으로 다음을 수행한다:
+`-Verify`는 진단만 수행한다. MISSING 파일을 재Import 하려면 **`-Reimport`를 함께** 지정해야 한다.
+
+`-Verify -Reimport` 실행 시 MISSING 파일이 발견되면 `Invoke-VerifyReimport` 함수가 자동으로 다음을 수행한다:
 1. Verify CSV에서 `Status = MISSING` 행을 읽는다.
 2. 해당 파일을 라이브러리에서 **오늘 날짜 폴더**로 복사한다 (이미 폴더가 있으면 누적).
 3. Mapping.xdm / Alignment.dat를 누적 갱신한다.

@@ -42,9 +42,14 @@
 .PARAMETER Verify
     마지막에 EDM 서버 등록 검증을 수행한다 (읽기 전용).
     config 의 verify.enabled 가 true 면 이 스위치 없이도 수행한다.
+    MISSING 파일이 있어도 재Import 는 하지 않는다. 재Import 는 -Reimport 를 함께 지정한다.
 
 .PARAMETER SkipVerify
     config 에서 켜져 있어도 이번 실행에서는 검증을 건너뛴다.
+
+.PARAMETER Reimport
+    -Verify 검증 결과 MISSING 파일이 있으면 자동으로 재Import 한다.
+    -Verify 와 함께 쓴다. -Verify 없이 단독으로 쓰면 무시된다.
 
 .EXAMPLE
     .\Run-3DModelSync.ps1 -WhatIf
@@ -68,6 +73,7 @@
 
     검증(Verify)은 진단 기능이라 종료코드를 좌우하지 않는다.
     미등록을 찾아도 경고로만 남긴다(종료코드 1).
+    재Import 는 -Reimport 를 함께 지정해야 한다 (-Verify 단독은 진단만).
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
@@ -79,6 +85,7 @@ param(
     [switch]$ReuseCockpit,
     [switch]$Verify,
     [switch]$SkipVerify,
+    [switch]$Reimport,
     [ValidateSet('Debug', 'Info', 'Warn', 'Error')][string]$LogLevel = 'Info'
 )
 
@@ -599,14 +606,12 @@ try {
             }
             elseif ($vrc -eq 1) {
                 Write-Log ("검증 결과 미등록 항목이 있습니다. CSV 를 확인하세요:`n" +
-                           "  $verifyCsv") -Level Warn -Step 'Verify'
+                           "  $verifyCsv`n" +
+                           "  재Import 하려면 -Verify -Reimport 를 함께 지정하세요.") -Level Warn -Step 'Verify'
 
-                # ----------------------------------------------------------------
-                # 스냅샷은 "import됨"으로 기록했지만 실제로 EDM에 없는 파일이 있다.
-                # MISSING 파일을 오늘 날짜 폴더에 다시 복사하고 Cockpit Import 를 재실행한다.
-                # SkipImport 이면 폴더만 준비하고 Import 는 하지 않는다.
-                # ----------------------------------------------------------------
-                if (-not $isDryRun -and (Test-Path -LiteralPath $verifyCsv)) {
+                # -Reimport 스위치가 있을 때만 자동 재Import 를 수행한다.
+                # -Verify 단독이면 진단 결과만 남기고 끝낸다.
+                if ($Reimport -and -not $isDryRun -and (Test-Path -LiteralPath $verifyCsv)) {
                     Invoke-VerifyReimport -Config $cfg `
                                          -VerifyCsv $verifyCsv `
                                          -SkipImport:$SkipImport `
