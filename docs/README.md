@@ -333,7 +333,8 @@ PS 7 은 BOM 없이도 UTF-8 로 읽기 때문에 증상이 보이지 않는 것
 ## 등록 검증 (EDM 서버 대조)
 
 설계팀 라이브러리의 STEP 파일이 EDM 서버에 실제로 등록돼 있는지 대조한다.
-**읽기 전용이다.** 누락을 찾아 보고만 하고, 재Import 는 하지 않는다.
+**검증 자체는 읽기 전용이다.** 누락을 찾아 보고만 한다.
+누락분을 다시 Import 하려면 `-Reimport` 를 따로 지정한다 (아래 [MISSING 파일 재Import](#missing-파일-재import)).
 
 ```powershell
 # 단독 실행
@@ -376,13 +377,52 @@ PS 7 은 BOM 없이도 UTF-8 로 읽기 때문에 증상이 보이지 않는 것
 | Status | 의미 | 조치 |
 |---|---|---|
 | `OK` | 파일도 있고 서버에도 등록됨 | 없음 |
-| `MISSING` | **파일은 있는데 서버에 없음** | 재Import 검토 (수동) |
+| `MISSING` | **파일은 있는데 서버에 없음** | 재Import 검토 (`-Reimport`) |
 | `ORPHAN` | 서버에만 있고 파일이 없음 | 파일 삭제됐거나 수동 등록분 |
 
 `DuplicateCount` 가 2 이상이면 같은 이름이 서버에 여러 건 등록된 것이다.
 
 CSV 는 `output\edm_verify_<날짜시각>.csv` 에 UTF-8 BOM 으로 기록되며
 `MISSING` 이 맨 위에 오도록 정렬된다.
+
+### MISSING 파일 재Import
+
+`-Verify` 만으로는 재Import 하지 않는다. 재Import 는 항상 `-Reimport` 를 붙여야 한다.
+
+**전체 재Import** — 검증 결과의 MISSING 을 모두 다시 올린다.
+
+```powershell
+.\Run-Sync.bat -Verify -Reimport
+```
+
+**선택 재Import** — MISSING 이 수백~수천 건일 때 일부만 골라 올린다.
+
+```powershell
+# 1) 검증만 실행 → output\edm_verify_<날짜시각>.csv 생성
+.\Run-Sync.bat -Verify
+
+# 2) CSV 를 Excel 로 열어 재Import 할 MISSING 행만 남기고 저장
+#    (Status, RelativePath 컬럼은 지우지 말 것. Status 가 MISSING 인 행만 처리된다)
+
+# 3) 편집한 CSV 로 재Import
+.\Run-Sync.bat -Reimport -ReimportCsv output\edm_verify_2026-10-26_061356.csv
+```
+
+동작 방식:
+
+- 대상 파일을 라이브러리에서 **`<dateFolderRoot>\reimport_<날짜_시각>\`** 폴더로 복사하고,
+  그 폴더에 Mapping.xdm / Alignment.dat 를 새로 만든 뒤 Cockpit Import 를 실행한다.
+  오늘 날짜 폴더(`yyyy-MM-dd`)를 쓰지 않는 이유: 그날 이미 Import 된 파일까지
+  다시 Bulk Import 되기 때문이다.
+- 폴더는 `-Reimport` 실행 + MISSING 1건 이상일 때만 만들어진다. 복사가 전부 실패하면
+  빈 폴더는 지운다. 평소 실행이나 `-Verify` 단독 실행에서는 만들지 않는다.
+- Import 없이 폴더만 준비하려면 `-SkipImport`, robocopy 를 생략하려면 `-SkipSync` 를 함께 준다.
+  `-SkipImport` 로 준비한 폴더를 나중에 올릴 때는 이름을 직접 지정한다:
+  `.\src\Step5.Import.ps1 -DateFolder reimport_2026-10-26_071135`
+  (`-DateFolder` 를 생략하면 `yyyy-MM-dd` 폴더 중 최신 것만 고른다)
+- 스냅샷은 건드리지 않는다. 재Import 실패는 경고로만 남고 종료코드에 영향이 없다.
+- **재Import 후에는 반드시 `-Verify` 를 다시 돌려** MISSING 이 줄었는지 확인한다.
+  Cockpit 이 "완료"를 반환해도 실제 등록을 보장하지 않는다.
 
 ### 종료코드
 
@@ -396,5 +436,8 @@ CSV 는 `output\edm_verify_<날짜시각>.csv` 에 UTF-8 BOM 으로 기록되며
 - 최초 1회 컴파일에 **JDK** 가 필요하다 (JRE 만으로는 안 된다).
   JDK 가 없는 장비라면 다른 장비에서 만든 `tools\edmverify\*.class` 를
   복사해 와도 된다.
+- `EdmVerify.java` 가 `.class` 보다 최신이면 매번 재컴파일을 시도한다. JDK 없는 장비에
+  수정된 `.java` 만 배포하면 `javac` 를 찾지 못해 검증이 실패하므로,
+  **`.java` 를 고쳤으면 JDK 장비에서 컴파일한 `.class` 를 함께 배포**한다.
 - 파이프라인과 독립적이다. 스냅샷을 읽지도 쓰지도 않으므로
   파이프라인 실행 중에 돌려도 서로 간섭하지 않는다.

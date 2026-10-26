@@ -326,9 +326,12 @@ function Compare-WithSnapshot {
         }
 
         if (-not $old) {
-            # 최초 실행(스냅샷 없음): 원본 공유폴더와 크기를 대조해 이미 import된 파일을 가려낸다.
+            # 스냅샷이 있는 경우: 스냅샷에 없는 파일 = 이번에 새로 들어온 파일 → 무조건 New
+            # (스냅샷이 있으면 모든 기존 파일이 스냅샷에 기록되어 있어야 한다)
             #
-            # 판정 기준:
+            # 스냅샷이 없는 경우(최초 실행): 원본 공유폴더와 크기를 대조해 이미 import된 파일을 가려낸다.
+            #
+            # 판정 기준 (최초 실행 시):
             #   원본에 없음              → TouchedOnly (과거 import 후 원본에서 삭제된 것)
             #   원본에 있고 크기 같음    → TouchedOnly (이미 import된 것으로 간주)
             #   원본에 있고 크기 다름    → New         (원본이 나중에 바뀐 것, import 필요)
@@ -336,7 +339,10 @@ function Compare-WithSnapshot {
             #
             # $SourceKeys 는 {key → size} hashtable (Get-SourceFileMap 반환값).
             # UNC 원본을 다시 읽지 않고 map 에서 크기를 꺼내 비교한다.
-            if ($SourceKeys) {
+            #
+            # ★ 최초 실행($prev.Count -eq 0)에서만 SourceKeys 비교를 수행한다.
+            #    스냅샷이 있으면 ($prev.Count -gt 0) 새 파일은 무조건 New 이다.
+            if ($SourceKeys -and $prev.Count -eq 0) {
                 if ($SourceKeys.ContainsKey($f.Key)) {
                     $srcSize = $SourceKeys[$f.Key]
                     if ($srcSize -eq $f.SizeBytes) {

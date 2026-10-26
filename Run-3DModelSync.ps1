@@ -118,7 +118,7 @@ if (-not $ConfigPath) { $ConfigPath = Join-Path $RepoRoot 'config\config.json' }
 # ================================================================ Verify 재Import 헬퍼
 <#
 .SYNOPSIS
-    -Verify 가 찾아낸 MISSING 파일을 오늘 날짜 폴더에 다시 스테이징하고 Cockpit 을 재실행한다.
+    -Verify 가 찾아낸 MISSING 파일을 재Import 전용 폴더에 스테이징하고 Cockpit 을 재실행한다.
 
 .DESCRIPTION
     스냅샷에는 "import됨"으로 기록됐지만 EDM 서버에는 없는 파일이 있을 때 호출된다.
@@ -129,8 +129,9 @@ if (-not $ConfigPath) { $ConfigPath = Join-Path $RepoRoot 'config\config.json' }
 
     처리 흐름:
       1. Verify CSV 에서 Status = MISSING 인 행을 읽는다.
-      2. 라이브러리에서 해당 파일을 오늘 날짜 폴더로 복사한다.
-      3. Mapping.xdm / Alignment.dat 를 (누적 방식으로) 생성한다.
+      2. 라이브러리에서 해당 파일을 dateFolderRoot\reimport_<날짜_시각> 폴더로 복사한다.
+         오늘 날짜 폴더를 쓰면 그날 이미 Import 된 파일까지 다시 Bulk Import 되므로 분리한다.
+      3. 그 폴더에 Mapping.xdm / Alignment.dat 를 새로 생성한다.
       4. Cockpit Import 를 실행한다 (-SkipImport 이면 3단계까지).
 
     ★ 스냅샷은 건드리지 않는다. ★
@@ -171,14 +172,12 @@ function Invoke-VerifyReimport {
         Write-Log "  MISSING: $($r.RelativePath)" -Level Warn -Step 'Verify'
     }
 
-    # --- 오늘 날짜 폴더로 복사 ---------------------------------------------
-    $folderName = (Get-Date).ToString('yyyy-MM-dd')
+    # --- 재Import 전용 폴더로 복사 -----------------------------------------
+    # 실행마다 새 폴더를 만들어 이번 재Import 대상만 담는다.
+    $folderName = 'reimport_' + (Get-Date).ToString('yyyy-MM-dd_HHmmss')
     $batchPath  = Join-Path $Config.paths.dateFolderRoot $folderName
-
-    if (-not (Test-Path -LiteralPath $batchPath)) {
-        New-Item -ItemType Directory -Path $batchPath -Force | Out-Null
-    }
-    Write-Log "재Import 날짜 폴더: $batchPath" -Level Info -Step 'Verify'
+    New-Item -ItemType Directory -Path $batchPath -Force | Out-Null
+    Write-Log "재Import 폴더: $batchPath" -Level Info -Step 'Verify'
 
     $staged  = 0
     $copyFailed = 0
@@ -217,11 +216,12 @@ function Invoke-VerifyReimport {
     Write-Log "재스테이징 완료: 복사 $staged 건, 실패 $copyFailed 건" -Level Info -Step 'Verify'
 
     if ($staged -eq 0) {
-        Write-Log "복사된 파일이 없어 재Import 를 건너뜁니다." -Level Warn -Step 'Verify'
+        Remove-Item -LiteralPath $batchPath -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Log "복사된 파일이 없어 재Import 를 건너뜁니다 (빈 재Import 폴더 삭제)." -Level Warn -Step 'Verify'
         return
     }
 
-    # --- Mapping.xdm / Alignment.dat 갱신 (누적) --------------------------
+    # --- Mapping.xdm / Alignment.dat 생성 (새 폴더라 이어받을 기존 항목 없음) ---
     $mapResult = New-3DMappingFile -ChangedFiles @($stagedFiles.ToArray()) `
                                    -OutputDirectory $batchPath `
                                    -MappingFileName $Config.mapping.mappingFileName `
@@ -249,13 +249,17 @@ function Invoke-VerifyReimport {
                                   -BulkTimeoutMs $to.BulkTimeoutMs `
                                   -MappingTimeoutMs $to.MappingTimeoutMs
         if ($imp.Success) {
-            Write-Log "MISSING 파일 재Import 완료" -Level Info -Step 'Verify'
+            Write-Log ("MISSING 파일 재Import 완료. 실제 등록 여부는 -Verify 로 다시 확인하세요.") `
+                -Level Info -Step 'Verify'
+        }
+        else {
+            Write-Log "MISSING 파일 재Import 실패(경고): $($imp.Message)" -Level Warn -Step 'Verify'
         }
     }
     catch {
         # 재Import 실패는 경고로만 남긴다. 파이프라인 종료코드에는 영향 없음.
         Write-Log ("MISSING 파일 재Import 실패(경고): $($_.Exception.Message)`n" +
-                   "  날짜 폴더는 남아 있습니다: $batchPath") -Level Warn -Step 'Verify'
+                   "  재Import 폴더는 남아 있습니다: $batchPath") -Level Warn -Step 'Verify'
     }
 }
 
@@ -435,7 +439,7 @@ try {
     #
     # ★ StrictMode 주의 ★ -SkipSync 이면 $sync 가 선언조차 되지 않았으므로
     #   '$sync -and ...' 앞에 Get-Variable 가드가 있어야 한다.
-    if ($treatAllAsNew) {
+    if ($treatAllAsNew -and $isFirstRun) {
         $syncVar = Get-Variable -Name 'sync' -ErrorAction SilentlyContinue
         $preSyncKeys = if ($syncVar -and $syncVar.Value -and $syncVar.Value.PreSyncKeys) {
             $syncVar.Value.PreSyncKeys

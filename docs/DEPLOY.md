@@ -59,6 +59,9 @@ tools\Inspect-BulkImportDialog.ps1
 tools\Get-CockpitTree.ps1
 tools\Inspect-CockpitUI.ps1
 tools\Test-JabRaw.ps1
+tools\Test-EdmRegistration.ps1     # -Verify / -Reimport 에 필요
+tools\edmverify\EdmVerify.java     # 〃
+tools\edmverify\*.class            # 〃 (운영 서버는 JDK 가 없으므로 컴파일된 파일 필수)
 docs\
 ```
 
@@ -391,6 +394,29 @@ Get-PnpDevice -Class Display | Select-Object Status, FriendlyName
 Start-ScheduledTask -TaskName '3D_Model_Auto_Import'
 (Get-ScheduledTaskInfo -TaskName '3D_Model_Auto_Import').LastTaskResult
 ```
+
+### EDM 등록 검증 / 누락분 재Import
+
+```powershell
+# 1) 검증만 (읽기 전용) → output\edm_verify_<날짜시각>.csv
+.\Run-Sync.bat -Verify
+
+# 2-a) MISSING 전체 재Import
+.\Run-Sync.bat -Verify -Reimport
+
+# 2-b) 일부만 재Import: CSV 에서 원하는 MISSING 행만 남겨 저장한 뒤
+.\Run-Sync.bat -Reimport -ReimportCsv output\edm_verify_<날짜시각>.csv
+
+# 3) 재Import 후 다시 검증해 MISSING 이 줄었는지 확인
+.\Run-Sync.bat -Verify
+```
+
+- 재Import 는 `<dateFolderRoot>\reimport_<날짜_시각>\` 폴더를 새로 만들어 대상 파일만 담는다.
+  Cockpit 화면 자동화가 돌므로 실행 중에는 PC 를 조작하지 않는다.
+- 운영 서버에는 JDK 가 없다(JRE 만 있음). `tools\edmverify\EdmVerify.java` 를 고쳐 배포할 때는
+  **JDK 장비에서 컴파일한 `*.class` 를 함께 복사**해야 한다. `.java` 가 더 최신이면 재컴파일을
+  시도하다 `javac` 를 못 찾아 검증이 실패한다.
+- 상세: [README.md — MISSING 파일 재Import](README.md#missing-파일-재import)
 
 ---
 

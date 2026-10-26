@@ -388,7 +388,9 @@ if ($MyInvocation.InvocationName -ne '.') {
     if ($DateFolder) {
         $datePath = Join-Path $stageRoot $DateFolder
     } else {
+        # yyyy-MM-dd 이름만 대상. reimport_* 폴더는 이름순으로 뒤에 와서 잘못 선택된다.
         $latest = Get-ChildItem -LiteralPath $stageRoot -Directory -ErrorAction SilentlyContinue |
+                  Where-Object { $_.Name -match '^\d{4}-\d{2}-\d{2}$' } |
                   Sort-Object Name -Descending | Select-Object -First 1
         if (-not $latest) { throw "날짜 폴더가 없습니다: $stageRoot" }
         $datePath = $latest.FullName

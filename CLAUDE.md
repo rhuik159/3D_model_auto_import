@@ -96,7 +96,7 @@ notepad config\config.json   # <<SET-ME>> 세 곳(sourceShare / designLibrary / 
 .\tools\Invoke-PhaseATests.ps1 -Engine powershell
 ```
 
-**양쪽 엔진(pwsh, powershell)에서 모두 통과해야 한다.** 개별 케이스 실행 옵션은 없다(전체 실행만). 기본 테스트 루트는 `C:\Temp\3dtest`(`-TestRoot`로 변경), 픽스처/설정은 `tools\New-TestFixture.ps1`, `tools\Set-TestConfig.ps1`이 만든다.
+**양쪽 엔진(pwsh, powershell)에서 모두 통과해야 한다.** 픽스처는 가짜 STEP이라 테스트는 항상 `-SkipImport`로 파이프라인을 호출한다 (Cockpit Import를 돌리면 Bulk Import 오류가 난다). Verify/Reimport/Cockpit은 이 테스트 범위 밖이다. 개별 케이스 실행 옵션은 없다(전체 실행만). 기본 테스트 루트는 `C:\Temp\3dtest`(`-TestRoot`로 변경), 픽스처/설정은 `tools\New-TestFixture.ps1`, `tools\Set-TestConfig.ps1`이 만든다.
 
 테스트가 검증하는 주요 시나리오 (45개 항목):
 1. 최초 실행 → 기준선만 생성, 날짜 폴더 없음
@@ -249,9 +249,11 @@ Import가 실패하면 스냅샷을 갱신하지 않는다. 갱신하면 그날 
 
 `-Verify -Reimport` 실행 시 MISSING 파일이 발견되면 `Invoke-VerifyReimport` 함수가 자동으로 다음을 수행한다:
 1. Verify CSV에서 `Status = MISSING` 행을 읽는다.
-2. 해당 파일을 라이브러리에서 **오늘 날짜 폴더**로 복사한다 (이미 폴더가 있으면 누적).
-3. Mapping.xdm / Alignment.dat를 누적 갱신한다.
+2. 해당 파일을 라이브러리에서 **`<dateFolderRoot>\reimport_<yyyy-MM-dd_HHmmss>\`** 새 폴더로 복사한다. 오늘 날짜 폴더를 쓰면 그날 이미 Import된 파일까지 다시 Bulk Import되므로 분리했다. 복사가 전부 실패하면 빈 폴더는 지운다.
+3. 그 폴더에 Mapping.xdm / Alignment.dat를 새로 만든다.
 4. Cockpit Import를 재실행한다 (`-SkipImport`이면 폴더 준비까지만).
+
+`Step5.Import.ps1`을 `-DateFolder` 없이 실행하면 `yyyy-MM-dd` 이름의 폴더만 자동 선택한다 (reimport_* 폴더는 `-DateFolder reimport_...`로 직접 지정).
 
 재Import 실패는 **경고(종료코드 미영향)**로만 남긴다. 이 함수는 스냅샷을 건드리지 않는다 — 스냅샷이 이미 갱신된 상태이고 다음 실행에서 이 파일들은 `Unchanged`로 처리되기 때문이다.
 
