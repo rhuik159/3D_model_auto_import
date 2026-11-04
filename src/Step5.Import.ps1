@@ -195,6 +195,8 @@ function Stop-Cockpit {
                 if (-not $title -or $script:CockpitHelperWindowTitles -contains $title) { continue }
                 if ($title -like '*Closing application*') { $closing = $true; continue }
                 if ($title -like 'Xpedition EDM Library Cockpit*') { continue }
+                # 닫힌 대화상자도 숨겨진 채 한동안 남는다. 보이는 창만 대화상자로 다룬다.
+                if (-not [Jab.Win32]::IsWindowVisible($h)) { continue }
 
                 $vm = 0; $ac = [long]0
                 $jabOk = $script:JabInitialized -and

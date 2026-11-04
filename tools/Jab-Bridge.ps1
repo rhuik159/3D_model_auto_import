@@ -1654,6 +1654,13 @@ function Close-JabResultDialog {
         throw "작업이 끝나지 않아 결과 창의 버튼이 활성화되지 않았습니다 (${WaitFinishMs}ms 대기)."
     }
 
+    # 결과 내용을 남겨 둔다 (등록 실패·경고가 여기 찍힌다). 길면 앞부분만.
+    $resText = Get-JabDialogMessage -VmId $target.VmId -Ac $target.Ac
+    if ($resText) {
+        if ($resText.Length -gt 800) { $resText = $resText.Substring(0, 800) + ' ...(생략)' }
+        Write-Log "  결과 창 내용: $resText"
+    }
+
     [Jab.Win32]::ForceForeground($target.Hwnd) | Out-Null
     Start-Sleep -Milliseconds 400
 
@@ -1662,6 +1669,22 @@ function Close-JabResultDialog {
     if (Invoke-JabPress -Hwnd $target.Hwnd -VmId $target.VmId -RootAc $target.Ac -TargetAc $btn.Ac `
                         -IsDone $closed -TimeoutMs $TimeoutMs -What "결과 창 '$($btn.Name)'") {
         return $true
+    }
+
+    # 여기까지 왔으면 작업은 이미 끝났다(버튼 활성화). 닫는 방식은 결과에 영향이 없다.
+    # 2026-11-04: Mapping 결과 창이 OK 클릭으로 안 닫혔지만 WM_CLOSE 로는 바로 닫혔다.
+    Write-Log "  '$($btn.Name)' 클릭으로 닫히지 않아 Enter / 창 닫기로 닫습니다."
+    if ([Jab.Win32]::ForceForeground($resHwnd)) {
+        [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+        for ($i = 0; $i -lt 10; $i++) {
+            Start-Sleep -Milliseconds 300; [Jab.Win32]::PumpMessages(10)
+            if (& $closed) { Write-Log "  결과 창을 닫았습니다 (Enter)"; return $true }
+        }
+    }
+    [Jab.Win32]::PostClose($resHwnd) | Out-Null
+    for ($i = 0; $i -lt 15; $i++) {
+        Start-Sleep -Milliseconds 300; [Jab.Win32]::PumpMessages(10)
+        if (& $closed) { Write-Log "  결과 창을 닫았습니다 (창 닫기)"; return $true }
     }
     throw "결과 창을 닫지 못했습니다."
 }
