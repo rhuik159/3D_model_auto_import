@@ -65,71 +65,193 @@ $Step5Root = Split-Path $PSScriptRoot -Parent
 
 # ================================================================ 함수
 
+# 창 목록에서 늘 보이는 Java/IME 보조 창. 대화상자로 취급하지 않는다.
+$script:CockpitHelperWindowTitles = @('Access Bridge status', 'theAwtToolkitWindow', 'MSCTFIME UI', 'Default IME')
+
+function Get-CockpitProcessTree {
+    <#
+    .SYNOPSIS
+        Cockpit 프로세스와 그 하위 xDMLibraryClient 프로세스 ID 를 모두 돌려준다.
+    .DESCRIPTION
+        Cockpit 은 창이 있는 부모와 창이 없는 자식, 두 프로세스로 뜬다.
+        부모만 지켜보면 자식이 남아 서버 세션이 정리되지 않을 수 있다.
+    #>
+    param([Parameter(Mandatory)][int[]]$RootIds)
+    $all = @(Get-CimInstance -ClassName Win32_Process -Filter "Name='xDMLibraryClient.exe'" -ErrorAction SilentlyContinue)
+    $ids = New-Object System.Collections.Generic.List[int]
+    $queue = New-Object System.Collections.Generic.Queue[int]
+    foreach ($r in $RootIds) { $queue.Enqueue($r) }
+    while ($queue.Count -gt 0) {
+        $x = $queue.Dequeue()
+        if ($ids.Contains($x)) { continue }
+        $ids.Add($x)
+        foreach ($c in ($all | Where-Object { $_.ParentProcessId -eq $x })) { $queue.Enqueue([int]$c.ProcessId) }
+    }
+    return ,$ids.ToArray()
+}
+
 function Stop-Cockpit {
     <#
     .SYNOPSIS
-        Cockpit 을 종료한다.
+        Cockpit 을 종료한다. 정상 종료를 최대한 시도하고, 끝내 안 될 때만 강제 종료한다.
 
     .DESCRIPTION
-        먼저 창 닫기(WM_CLOSE)로 정상 종료를 시도하고, 시간 안에 끝나지 않으면
-        프로세스를 강제 종료한다. Import 직후 바로 죽이면 마무리 작업이 잘릴 수
-        있으므로 기본적으로 정상 종료를 먼저 시도한다.
+        강제 종료는 서버 세션을 남겨 다음 로그인의 'Could not get DMSInstance
+        reference object.' 를 부르므로 마지막 수단이다.
+          1) 남아 있는 대화상자를 닫는다 (Error 는 메시지 기록 후 OK, 나머지는 창 닫기)
+          2) 제목으로 찾은 메인 창에 WM_CLOSE 를 보낸다 (X 버튼과 같다).
+             Process.CloseMainWindow 는 Windows 가 고른 대표 창으로 보내서,
+             대화상자가 남아 있거나 창이 '안 보임' 으로 잡히는 세션에선 헛돈다.
+          3) 기다리는 동안 Error·종료 확인 창을 처리한다.
+             메인 창 제목에 'Closing application' 이 붙어 있으면 종료가 진행 중이므로 더 기다린다.
+          4) 부모와 자식 프로세스가 모두 끝나야 정상 종료로 본다.
+          5) 그래도 남으면 그때 떠 있던 창을 로그에 남기고 자식까지 강제 종료한다.
+        2026-11-04 실측: WM_CLOSE 후 0.7초에 'Closing application, please wait...', 3.7초에 두 프로세스 모두 종료.
 
     .PARAMETER ProcessId
-        종료할 Cockpit 프로세스 ID. 생략하면 떠 있는 xDMLibraryClient 전부.
+        종료할 Cockpit 프로세스 ID. 생략하면 떠 있는 Cockpit 전부(수동으로 띄운 것 포함).
 
     .PARAMETER TimeoutSeconds
-        정상 종료를 기다릴 시간. 초과하면 강제 종료한다.
+        정상 종료를 기다릴 시간.
+
+    .PARAMETER ClosingGraceSeconds
+        'Closing application' 이 보이는 동안 TimeoutSeconds 뒤에 추가로 기다릴 최대 시간.
     #>
     param(
         [int]$ProcessId = 0,
-        [int]$TimeoutSeconds = 30
+        [int]$TimeoutSeconds = 60,
+        [int]$ClosingGraceSeconds = 120
     )
 
-    # if/else 의 결과를 그대로 받으면 원소가 1개일 때 PowerShell 이 풀어버려서
-    # StrictMode 에서 .Count 접근이 예외가 된다. 식 전체를 @() 로 감싸야 한다.
-    $targets = @(
+    $roots = @(
         if ($ProcessId -gt 0) {
-            Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+            if (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue) { $ProcessId }
         } else {
-            Get-Process -Name 'xDMLibraryClient' -ErrorAction SilentlyContinue
+            $all = @(Get-CimInstance -ClassName Win32_Process -Filter "Name='xDMLibraryClient.exe'" -ErrorAction SilentlyContinue)
+            $allIds = @($all | ForEach-Object { [int]$_.ProcessId })
+            $all | Where-Object { $allIds -notcontains [int]$_.ParentProcessId } | ForEach-Object { [int]$_.ProcessId }
         }
     )
-    if ($targets.Count -eq 0) {
+    if ($roots.Count -eq 0) {
         Write-Log "종료할 Cockpit 프로세스가 없습니다." -Level Info
         return $true
     }
+    $tree = Get-CockpitProcessTree -RootIds $roots
+    $aliveIds = { @($tree | Where-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue }) }
 
-    foreach ($p in $targets) {
-        Write-Log "Cockpit 종료 시도 (PID $($p.Id))..." -Level Info
-        try { $null = $p.CloseMainWindow() } catch { }
-    }
+    foreach ($r in $roots) {
+        # Get-CockpitProcessTree 는 배열을 통째로 돌려주므로 @() 로 다시 감싸면 원소 1개로 세어진다
+        $subCount = (Get-CockpitProcessTree -RootIds @($r)).Count - 1
+        Write-Log "Cockpit 종료 시도 (PID $r, 하위 프로세스 ${subCount}개)..." -Level Info
 
-    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    while ((Get-Date) -lt $deadline) {
-        Start-Sleep -Milliseconds 700
-        $alive = @($targets | ForEach-Object {
-            Get-Process -Id $_.Id -ErrorAction SilentlyContinue
-        } | Where-Object { $_ })
-        if ($alive.Count -eq 0) {
-            Write-Log "Cockpit 정상 종료됨" -Level Info
-            return $true
+        # 1) 남은 대화상자 정리. 모달이 떠 있으면 메인 창의 WM_CLOSE 가 무시된다.
+        $main = Get-CockpitMainWindow -ProcessId $r
+        foreach ($h in [Jab.Win32]::GetAllWindows([uint32]$r)) {
+            if ($h -eq $main -or -not [Jab.Win32]::IsWindowVisible($h)) { continue }
+            $title = [Jab.Win32]::GetWindowTitle($h)
+            if ($script:CockpitHelperWindowTitles -contains $title) { continue }
+            $closedByJab = $false
+            if ($title -eq 'Error' -and $script:JabInitialized) {
+                $vm = 0; $ac = [long]0
+                if ([Jab.Bridge]::getAccessibleContextFromHWND($h, [ref]$vm, [ref]$ac) -and $ac -ne 0) {
+                    try { $closedByJab = [bool](Close-CockpitErrorDialog -Hwnd $h -VmId $vm -Ac $ac -TimeoutMs 5000) } catch { }
+                }
+            }
+            if (-not $closedByJab) {
+                Write-Log "  남아 있던 창을 닫습니다: '$title'" -Level Info
+                [Jab.Win32]::PostClose($h) | Out-Null
+            }
+        }
+        Start-Sleep -Milliseconds 500
+
+        # 2) 메인 창에 닫기 요청
+        $main = Get-CockpitMainWindow -ProcessId $r
+        if ($main -ne [IntPtr]::Zero) {
+            [Jab.Win32]::PostClose($main) | Out-Null
+        } else {
+            Write-Log "  제목으로 메인 창을 찾지 못해 대표 창으로 닫기를 요청합니다." -Level Info
+            try { $null = (Get-Process -Id $r -ErrorAction Stop).CloseMainWindow() } catch { }
         }
     }
 
-    # 정상 종료가 안 되면(변경사항 확인 대화상자 등) 강제 종료한다.
-    $remain = @($targets | ForEach-Object {
-        Get-Process -Id $_.Id -ErrorAction SilentlyContinue
-    } | Where-Object { $_ })
-    foreach ($p in $remain) {
-        Write-Log "정상 종료에 실패해 강제 종료합니다 (PID $($p.Id))" -Level Warn
-        try { Stop-Process -Id $p.Id -Force -ErrorAction Stop } catch {
-            Write-Log "  강제 종료 실패: $($_.Exception.Message)" -Level Error
-            return $false
+    # 3) 종료 대기
+    $start = Get-Date
+    $softDeadline = $start.AddSeconds($TimeoutSeconds)
+    $hardDeadline = $softDeadline.AddSeconds($ClosingGraceSeconds)
+    $noted = @{}
+    while ((Get-Date) -lt $hardDeadline) {
+        Start-Sleep -Milliseconds 1000
+        # @() 필수: 1개면 숫자 하나로 풀려 StrictMode 에서 .Count 가 예외가 된다 (실측)
+        $alive = @(& $aliveIds)
+        if ($alive.Count -eq 0) {
+            Write-Log ("Cockpit 정상 종료됨 ({0:N1}초)" -f ((Get-Date) - $start).TotalSeconds) -Level Info
+            return $true
+        }
+
+        $closing = $false
+        foreach ($id in $alive) {
+            foreach ($h in [Jab.Win32]::GetAllWindows([uint32]$id)) {
+                $title = [Jab.Win32]::GetWindowTitle($h)
+                if (-not $title -or $script:CockpitHelperWindowTitles -contains $title) { continue }
+                if ($title -like '*Closing application*') { $closing = $true; continue }
+                if ($title -like 'Xpedition EDM Library Cockpit*') { continue }
+
+                $vm = 0; $ac = [long]0
+                $jabOk = $script:JabInitialized -and
+                         [Jab.Bridge]::getAccessibleContextFromHWND($h, [ref]$vm, [ref]$ac) -and $ac -ne 0
+                if ($title -eq 'Error' -and $jabOk) {
+                    try { Close-CockpitErrorDialog -Hwnd $h -VmId $vm -Ac $ac -TimeoutMs 5000 | Out-Null } catch { }
+                    continue
+                }
+                if ($title -match '(?i)exit|quit|confirm|question' -and $jabOk) {
+                    Write-Log "  종료 확인 창 '$title' - 확인을 누릅니다" -Level Info
+                    try { _ClickDialogButton -Hwnd $h -VmId $vm -Ac $ac -Labels @('Yes','OK','Exit','예','확인') -TimeoutMs 5000 | Out-Null }
+                    catch { Write-Log "  확인 버튼을 누르지 못함: $($_.Exception.Message)" -Level Info }
+                    continue
+                }
+                $k = "$h|$title"
+                if (-not $noted.ContainsKey($k)) {
+                    $noted[$k] = $true
+                    Write-Log "  종료 중 뜬 창 (건드리지 않음): '$title'" -Level Info
+                }
+            }
+        }
+
+        if ((Get-Date) -ge $softDeadline) {
+            if (-not $closing) { break }
+            if (-not $noted.ContainsKey('__grace')) {
+                $noted['__grace'] = $true
+                Write-Log "  종료가 진행 중이라('Closing application') 최대 ${ClosingGraceSeconds}초 더 기다립니다." -Level Info
+            }
+        }
+    }
+
+    # 5) 강제 종료. 원인을 알 수 있게 그때 떠 있던 창을 남긴다.
+    $remain = @(& $aliveIds)
+    $wins = @(foreach ($id in $remain) {
+        foreach ($h in [Jab.Win32]::GetAllWindows([uint32]$id)) {
+            $t = [Jab.Win32]::GetWindowTitle($h)
+            if ($t -and $script:CockpitHelperWindowTitles -notcontains $t) {
+                "PID $id '$t'$(if (-not [Jab.Win32]::IsWindowVisible($h)) { ' (숨김)' })"
+            }
+        }
+    })
+    Write-Log ("정상 종료에 실패해 강제 종료합니다 (PID {0}). 남아 있던 창: {1}" -f ($remain -join ', '),
+               $(if ($wins.Count) { $wins -join ' / ' } else { '(없음)' })) -Level Warn
+    $failed = $false
+    # $tree 는 부모 → 자식 순(BFS)이므로 뒤집어서 자식부터 끝낸다
+    $order = @($tree | Where-Object { $remain -contains $_ }); [array]::Reverse($order)
+    foreach ($id in $order) {
+        try { Stop-Process -Id $id -Force -ErrorAction Stop }
+        catch {
+            if (Get-Process -Id $id -ErrorAction SilentlyContinue) {
+                Write-Log "  강제 종료 실패 (PID $id): $($_.Exception.Message)" -Level Error
+                $failed = $true
+            }
         }
     }
     Start-Sleep -Milliseconds 500
-    return $true
+    return (-not $failed)
 }
 
 function Get-ImportTimeouts {
@@ -231,6 +353,8 @@ function Invoke-Step5Import {
         $cockpitScript = Join-Path $Step5Root 'tools\Start-Cockpit.ps1'
         $cockpit = & $cockpitScript -Reuse:$Reuse
         $cockpitPid = $cockpit.Process.Id
+        # 오케스트레이터의 마지막 정리가 이 Cockpit 만 닫도록 기억해 둔다 (수동 세션 보호)
+        $script:Step5CockpitPid = $cockpitPid
         foreach ($d in @($cockpit.Diag)) { Write-Log $d -Level Warn -Step 'Step5' }
         Write-Log "Cockpit PID $cockpitPid 준비됨" -Level Info -Step 'Step5'
 
@@ -304,20 +428,13 @@ function Invoke-Step5Import {
 
         Invoke-JabMenuPath -Path @('Tools','Library','3D Models','Bulk Import') -Hwnd $hwnd | Out-Null
 
-        $dlg = Wait-JabDialog -MainHwnd $hwnd -ProcessId $cockpitPid -TimeoutMs 20000
-        if ($null -eq $dlg) { throw "Bulk Import 대화상자가 나타나지 않았습니다." }
+        # 메뉴 → 'Setup M3DL Connection'(EDM Server only + OK) → 폴더 선택창 순서다.
+        # Cockpit 이 비정상 종료된 뒤에는 Setup M3DL 위에 'Error' 가 끼어드는데,
+        # 그 창에 경로를 넣으면 멈춘다. Wait-CockpitDialog 가 Error 를 닫고
+        # Setup M3DL 을 OK 로 넘긴 뒤 폴더 선택창만 돌려준다.
+        $dlg = Wait-CockpitDialog -MainHwnd $hwnd -ProcessId $cockpitPid `
+                                  -ExpectTitles @('Please select Custom Models Directory') -TimeoutMs 60000
         Write-Log "  대화상자: '$($dlg.Title)'" -Level Info -Step 'Step5'
-
-        # 폴더 선택창 대신 'Setup M3DL Connection' 이 먼저 뜨는 경우가 있다
-        # (연결이 아직 설정되지 않은 세션). 넘기고 본 대화상자를 다시 기다린다.
-        if ($dlg.Title -like '*M3DL*') {
-            Write-Log "  M3DL 연결 설정 창 처리 중..." -Level Info -Step 'Step5'
-            $null = Dismiss-CockpitStartupDialog -ProcessId $cockpitPid -MainHwnd $hwnd
-            Start-Sleep -Milliseconds 1000
-            $dlg = Wait-JabDialog -MainHwnd $hwnd -ProcessId $cockpitPid -TimeoutMs 20000
-            if ($null -eq $dlg) { throw "M3DL 설정 후 Bulk Import 대화상자가 나타나지 않았습니다." }
-            Write-Log "  대화상자: '$($dlg.Title)'" -Level Info -Step 'Step5'
-        }
 
         # UNC 경로를 그대로 넣어도 Cockpit 이 수락한다 (확인 완료).
         Do-JabFileDialog -Dialog $dlg -Path $DatePath | Out-Null
@@ -340,8 +457,10 @@ function Invoke-Step5Import {
 
         Invoke-JabMenuPath -Path @('Tools','Library','3D Models','Import Mapping File') -Hwnd $hwnd | Out-Null
 
-        $dlg2 = Wait-JabDialog -MainHwnd $hwnd -ProcessId $cockpitPid -TimeoutMs 20000
-        if ($null -eq $dlg2) { throw "Import Mapping File 대화상자가 나타나지 않았습니다." }
+        # 제목 없는 창을 매핑 대화상자로 착각해 실패·강제 종료한 사례가 있어(2026-11-04)
+        # 제목이 맞는 창만 받는다.
+        $dlg2 = Wait-CockpitDialog -MainHwnd $hwnd -ProcessId $cockpitPid `
+                                   -ExpectTitles @('Import mapping file') -TimeoutMs 40000
         Write-Log "  대화상자: '$($dlg2.Title)'" -Level Info -Step 'Step5'
 
         # 이쪽은 JFileChooser 가 아니라 전용 폼이라 별도 핸들러를 쓴다.

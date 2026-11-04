@@ -694,10 +694,12 @@ catch {
 finally {
     # 예외로 빠져나온 경우 Invoke-Step5Import 의 finally 가 못 돌았을 수 있다.
     # Cockpit 을 띄워놓고 죽으면 다음 실행이 유령 인스턴스와 엉키므로 정리한다.
+    # 이 실행이 띄운 Cockpit 만 닫는다. PID 없이 부르면 사용자가 직접 띄운 Cockpit 까지 닫힌다.
     # (-KeepCockpitOpen 이면 사용자가 의도한 것이므로 남겨둔다)
     if (-not $KeepCockpitOpen -and -not $SkipImport -and -not $isDryRun) {
-        if (Get-Command Stop-Cockpit -ErrorAction SilentlyContinue) {
-            try { $null = Stop-Cockpit } catch { }
+        $ownPid = Get-Variable -Name Step5CockpitPid -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+        if ($ownPid -and (Get-Command Stop-Cockpit -ErrorAction SilentlyContinue)) {
+            try { $null = Stop-Cockpit -ProcessId $ownPid } catch { }
         }
     }
     if ($lockPath) { Remove-RunLock -LockStream $lockStream -LockPath $lockPath }

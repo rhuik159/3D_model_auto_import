@@ -397,6 +397,13 @@ namespace Jab
             else PostClick(hwnd, screenX, screenY);
         }
 
+        // 버튼 좌표를 얻지 못할 때의 최후 수단 (제목 표시줄 X 와 같은 효과)
+        public static bool PostClose(IntPtr hwnd)
+        {
+            const uint WM_CLOSE = 0x0010;
+            return PostMessage(hwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+        }
+
         // 다른 프로세스 창은 SetForegroundWindow 만으로는 전면 전환이 거부된다.
         // 현재 포그라운드 스레드에 입력을 붙여야 확실히 올라온다.
         // 전면 확보에 실패하면 SendKeys 가 엉뚱한 창으로 가므로 반드시 확인할 것.
@@ -1180,16 +1187,10 @@ function Dismiss-CockpitStartupDialog {
         if ($ac -eq 0) { continue }
 
         # --- 'Could not get DMSInstance reference object.' 같은 Cockpit 에러 창 ---
-        # 기동 직후 EDM 서버 연결 실패 시 뜬다. OK 를 눌러 닫지 않으면
-        # 메뉴 바가 영원히 나타나지 않는다.
+        # Cockpit 이 비정상 종료된 다음 로그인에서 뜬다. OK 를 눌러 닫지 않으면
+        # 메뉴 바가 영원히 나타나지 않는다. 닫으면 정상 진행된다.
         if ($title -eq 'Error') {
-            Write-Verbose "Cockpit Error 창 처리 중: '$title'"
-            $dismissed = (_ClickDialogButton -Hwnd $h -VmId $vm -Ac $ac `
-                                             -Labels @('OK','확인') -TimeoutMs $TimeoutMs)
-            if ($dismissed) {
-                Write-Log "Cockpit 에러 창을 닫았습니다 (OK). 서버 연결 상태를 확인하세요." -Level Warn
-                return $true
-            }
+            return (Close-CockpitErrorDialog -Hwnd $h -VmId $vm -Ac $ac -TimeoutMs $TimeoutMs)
         }
 
         # --- License Selector : Librarian 열 선택 후 OK ---
@@ -1613,6 +1614,7 @@ function Close-JabResultDialog {
         foreach ($h in [Jab.Win32]::GetAllWindows([uint32]$ProcessId)) {
             if ($h -eq $MainHwnd) { continue }
             $title = [Jab.Win32]::GetWindowTitle($h)
+            if ($title -eq 'Error') { continue }   # 결과 창이 아니다. Wait-CockpitDialog 쪽에서 닫는다
             if ($TitlePatterns.Count -gt 0 -and -not ($TitlePatterns | Where-Object { $title -like $_ })) { continue }
             $vm = 0; $ac = [long]0
             if (-not [Jab.Bridge]::getAccessibleContextFromHWND($h, [ref]$vm, [ref]$ac)) { continue }
@@ -1662,6 +1664,153 @@ function Close-JabResultDialog {
         return $true
     }
     throw "결과 창을 닫지 못했습니다."
+}
+
+function Get-JabDialogMessage {
+    <#
+    .SYNOPSIS
+        대화상자 안의 글자(버튼 제외)를 접근성 이름·설명에서 모아 한 줄로 돌려준다.
+    .DESCRIPTION
+        로그용 최선 노력이다. 메시지 영역이 이름을 노출하지 않으면 빈 문자열이 나온다.
+    #>
+    param(
+        [Parameter(Mandatory)][int]$VmId,
+        [Parameter(Mandatory)][long]$Ac
+    )
+    $parts = New-Object System.Collections.Generic.List[string]
+    try {
+        foreach ($n in [Jab.Win32]::DumpTreeW($VmId, $Ac, 12, 5000)) {
+            if ($n.Role -in 'push button','root pane','layered pane','panel','frame','dialog','scroll bar','viewport','scroll pane') { continue }
+            $ci = New-Object Jab.AccessibleContextInfo
+            $desc = if ([Jab.Win32]::GetContextInfoW($VmId, $n.Ac, [ref]$ci, 1000)) { $ci.description } else { '' }
+            foreach ($s in @($n.Name, $desc)) {
+                if ($s -and $s.Trim() -and -not $parts.Contains($s.Trim())) { $parts.Add($s.Trim()) }
+            }
+        }
+    } catch { }
+    return ($parts -join ' / ')
+}
+
+function Close-CockpitErrorDialog {
+    <#
+    .SYNOPSIS
+        Cockpit 의 'Error' 창을 메시지를 기록한 뒤 닫는다.
+    .DESCRIPTION
+        반드시 다른 조작보다 먼저 메시지를 읽는다. 예전에는 이 창을 폴더 선택창으로 착각해
+        경로를 써 넣는 바람에 원래 메시지가 덮어써져 원인을 알 수 없었다.
+        OK 버튼 → (좌표를 못 얻으면) Enter 키 → WM_CLOSE 순으로 시도한다.
+    .OUTPUTS
+        닫았으면 $true.
+    #>
+    param(
+        [Parameter(Mandatory)][IntPtr]$Hwnd,
+        [Parameter(Mandatory)][int]$VmId,
+        [Parameter(Mandatory)][long]$Ac,
+        [int]$TimeoutMs = 10000
+    )
+    _AssertInit
+    $msg = Get-JabDialogMessage -VmId $VmId -Ac $Ac
+    if (-not $msg) { $msg = '(메시지를 읽지 못함)' }
+    Write-Log "Cockpit Error 창: $msg" -Level Warn
+
+    $isClosed = { -not [Jab.Win32]::IsWindow($Hwnd) -or -not [Jab.Win32]::IsWindowVisible($Hwnd) }
+    try {
+        if (_ClickDialogButton -Hwnd $Hwnd -VmId $VmId -Ac $Ac -Labels @('OK','확인') -TimeoutMs $TimeoutMs) {
+            Write-Log "  Error 창을 닫았습니다 (OK)" -Level Info
+            return $true
+        }
+    } catch {
+        Write-Log "  OK 버튼으로 닫지 못함: $($_.Exception.Message)" -Level Info
+    }
+
+    if ([Jab.Win32]::ForceForeground($Hwnd)) {
+        [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+        for ($i = 0; $i -lt 10; $i++) {
+            Start-Sleep -Milliseconds 300; [Jab.Win32]::PumpMessages(10)
+            if (& $isClosed) { Write-Log "  Error 창을 닫았습니다 (Enter)" -Level Info; return $true }
+        }
+    }
+
+    [Jab.Win32]::PostClose($Hwnd) | Out-Null
+    for ($i = 0; $i -lt 10; $i++) {
+        Start-Sleep -Milliseconds 300; [Jab.Win32]::PumpMessages(10)
+        if (& $isClosed) { Write-Log "  Error 창을 닫았습니다 (창 닫기)" -Level Info; return $true }
+    }
+    throw "Cockpit Error 창을 닫지 못했습니다: $msg"
+}
+
+function Wait-CockpitDialog {
+    <#
+    .SYNOPSIS
+        제목이 기대값과 맞는 대화상자가 뜰 때까지 기다리며, 끼어드는 창을 정리한다.
+    .DESCRIPTION
+        Wait-JabDialog 는 처음 보이는 창을 무조건 돌려줘서, 'Error' 나 제목 없는 창을
+        폴더 선택창으로 착각해 경로를 입력하는 사고가 있었다(2026-11-04).
+        여기서는 제목으로 분류한 뒤에만 돌려준다.
+          - 'Error'               : 메시지 기록 후 닫는다 (Setup M3DL 위에 뜬 것도 포함)
+          - 'Setup M3DL ...' 등   : 기동 관문 처리기로 넘긴다 (EDM Server only + OK)
+          - 기대 제목             : 돌려준다
+          - 그 밖(제목 없음 포함) : 절대 조작하지 않고 기록만 한다
+    .PARAMETER ExpectTitles
+        돌려줄 창 제목(-like 패턴).
+    .OUTPUTS
+        PSCustomObject { Hwnd, Title, VmId, Ac }. 시간 초과면 예외.
+    #>
+    param(
+        [Parameter(Mandatory)][IntPtr]$MainHwnd,
+        [Parameter(Mandatory)][int]$ProcessId,
+        [Parameter(Mandatory)][string[]]$ExpectTitles,
+        [int]$TimeoutMs = 30000
+    )
+    _AssertInit
+    $deadline = (Get-Date).AddMilliseconds($TimeoutMs)
+    $noted = @{}
+    while ((Get-Date) -lt $deadline) {
+        [Jab.Win32]::PumpMessages(30)
+        $wins = @(foreach ($h in [Jab.Win32]::GetAllWindows([uint32]$ProcessId)) {
+            if ($h -eq $MainHwnd) { continue }
+            $vm = 0; $ac = [long]0
+            if (-not [Jab.Bridge]::getAccessibleContextFromHWND($h, [ref]$vm, [ref]$ac)) { continue }
+            if ($ac -eq 0) { continue }
+            [PSCustomObject]@{ Hwnd = $h; Title = [Jab.Win32]::GetWindowTitle($h); VmId = $vm; Ac = $ac }
+        })
+
+        # Error 는 다른 창 위에 뜨는 모달이라 가장 먼저 닫는다
+        $err = $wins | Where-Object { $_.Title -eq 'Error' } | Select-Object -First 1
+        if ($err) {
+            Close-CockpitErrorDialog -Hwnd $err.Hwnd -VmId $err.VmId -Ac $err.Ac | Out-Null
+            Start-Sleep -Milliseconds 800
+            continue
+        }
+
+        $hit = $wins | Where-Object { $t = $_.Title; $ExpectTitles | Where-Object { $t -like $_ } } | Select-Object -First 1
+        if ($hit) { return $hit }
+
+        # Setup M3DL Connection 을 OK 로 닫으면 곧바로 폴더 선택창이 뜬다
+        if ($wins | Where-Object { $_.Title -like '*M3DL*' -or $_.Title -like '*License Selector*' -or $_.Title -like '*Production library*' }) {
+            $first = ($wins | Where-Object { $_.Title -like '*M3DL*' } | Select-Object -First 1)
+            if ($first) { Write-Log "  대화상자: '$($first.Title)' - EDM Server only 선택 후 OK" -Level Info }
+            try {
+                if (Dismiss-CockpitStartupDialog -ProcessId $ProcessId -MainHwnd $MainHwnd) { Start-Sleep -Milliseconds 1000 }
+            } catch {
+                Write-Log "  관문 대화상자 처리 실패(재시도): $($_.Exception.Message)" -Level Info
+                Start-Sleep -Milliseconds 1000
+            }
+            continue
+        }
+
+        foreach ($w in $wins) {
+            $k = "$($w.Hwnd)|$($w.Title)"
+            if (-not $noted.ContainsKey($k)) {
+                $noted[$k] = $true
+                Write-Log "  기다리는 창이 아니라 건드리지 않음: '$($w.Title)'" -Level Info
+            }
+        }
+        Start-Sleep -Milliseconds 400
+    }
+    $now = @([Jab.Win32]::GetAllWindows([uint32]$ProcessId) | Where-Object { $_ -ne $MainHwnd } |
+             ForEach-Object { "'$([Jab.Win32]::GetWindowTitle($_))'" }) -join ', '
+    throw "기다리던 대화상자($($ExpectTitles -join ', '))가 나타나지 않았습니다. 현재 창: $now"
 }
 
 function Wait-JabDialog {
@@ -1730,12 +1879,19 @@ function Do-JabFileDialog {
     Start-Sleep -Milliseconds 300
 
     # 1) 텍스트 필드 (보통 'File name:')
+    #    편집 가능한 칸만 받는다. 예전에는 아무 텍스트 요소나 받아서 Error 창의
+    #    메시지 영역에 경로를 덮어쓰는 사고가 있었다(2026-11-04).
     $tf = $null
-    foreach ($label in @('File name:','파일 이름:','')) {
-        $tf = [Jab.Win32]::FindElementW($Dialog.VmId, $Dialog.Ac, $label, 'text', 10, 4000)
-        if ($null -ne $tf) { break }
+    foreach ($label in @('File name:','파일 이름:')) {
+        $c = [Jab.Win32]::FindElementW($Dialog.VmId, $Dialog.Ac, $label, 'text', 10, 4000)
+        if ($null -ne $c -and $c.States -match 'editable') { $tf = $c; break }
     }
-    if ($null -eq $tf) { throw "파일 이름 입력 필드를 찾지 못했습니다." }
+    if ($null -eq $tf) {
+        $tf = [Jab.Win32]::DumpTreeW($Dialog.VmId, $Dialog.Ac, 10, 8000) |
+              Where-Object { $_.Role -eq 'text' -and $_.States -match 'editable' -and $_.States -match 'showing' } |
+              Select-Object -First 1
+    }
+    if ($null -eq $tf) { throw "편집 가능한 파일 이름 입력 필드를 찾지 못했습니다 (창: '$($Dialog.Title)')." }
 
     $fi = New-Object Jab.AccessibleContextInfo
     [Jab.Win32]::GetContextInfoW($Dialog.VmId, $tf.Ac, [ref]$fi, 3000) | Out-Null
